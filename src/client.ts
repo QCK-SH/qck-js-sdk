@@ -28,6 +28,9 @@ export class HttpClient {
     timeout?: number;
     retries?: number;
   }) {
+    if (!config.apiKey) {
+      throw new AuthenticationError('API key is required');
+    }
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
     this.timeout = config.timeout ?? DEFAULT_TIMEOUT;

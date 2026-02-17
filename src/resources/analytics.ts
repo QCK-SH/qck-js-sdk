@@ -17,7 +17,7 @@ export class AnalyticsResource {
    */
   async summary(params?: AnalyticsSummaryParams): Promise<AnalyticsSummary> {
     return this.client.get<AnalyticsSummary>('/analytics/summary', {
-      params: params as Record<string, string | undefined>,
+      params: params as Record<string, string | number | undefined>,
     });
   }
 
@@ -26,7 +26,7 @@ export class AnalyticsResource {
    */
   async timeseries(params?: TimeseriesParams): Promise<TimeseriesPoint[]> {
     return this.client.get<TimeseriesPoint[]>('/analytics/timeseries', {
-      params: params as Record<string, string | undefined>,
+      params: params as Record<string, string | number | undefined>,
     });
   }
 }

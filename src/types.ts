@@ -84,8 +84,9 @@ export interface LinkStats {
 // ── Analytics ──
 
 export interface AnalyticsSummaryParams {
-  from?: string;
-  to?: string;
+  start_date?: string;
+  end_date?: string;
+  days?: number;
   link_id?: string;
 }
 
@@ -98,8 +99,9 @@ export interface AnalyticsSummary {
 }
 
 export interface TimeseriesParams {
-  from?: string;
-  to?: string;
+  start_date?: string;
+  end_date?: string;
+  days?: number;
   link_id?: string;
   interval?: 'hour' | 'day' | 'week' | 'month';
 }
@@ -167,7 +169,7 @@ export interface JourneyEvent {
   link_id: string;
   visitor_id: string;
   session_id: string;
-  event_type: 'page_view' | 'scroll_depth' | 'time_on_page' | 'custom';
+  event_type: 'page_view' | 'scroll_depth' | 'time_on_page' | 'custom' | 'conversion';
   event_name?: string;
   page_url: string;
   page_title?: string;
@@ -242,6 +244,58 @@ export interface ListJourneyEventsParams {
   limit?: number;
   event_type?: string;
   period?: '7d' | '30d' | '90d';
+}
+
+// ── Conversions ──
+
+export type ConversionPeriod = '7d' | '30d' | '90d';
+export type ConversionInterval = 'hour' | 'day' | 'week' | 'month';
+export type ConversionDimension = 'source' | 'device' | 'country' | 'link' | 'name';
+
+export interface ConversionScopeParams {
+  period?: ConversionPeriod;
+  domain_id?: string;
+  link_id?: string;
+}
+
+export interface ConversionTimeseriesParams extends ConversionScopeParams {
+  interval?: ConversionInterval;
+}
+
+export interface ConversionBreakdownParams extends ConversionScopeParams {
+  dimension: ConversionDimension;
+}
+
+export interface TrackConversionParams {
+  link_id: string;
+  visitor_id: string;
+  session_id?: string;
+  name: string;
+  revenue?: number;
+  currency?: string;
+  page_url?: string;
+  event_data?: Record<string, unknown>;
+}
+
+export interface ConversionSummary {
+  total_conversions: number;
+  unique_converters: number;
+  total_revenue: number;
+  average_order_value: number;
+  conversion_rate: number;
+}
+
+export interface ConversionTimeseriesPoint {
+  timestamp: string;
+  conversions: number;
+  revenue: number;
+}
+
+export interface ConversionBreakdownEntry {
+  label: string;
+  conversions: number;
+  revenue: number;
+  conversion_rate: number;
 }
 
 // ── HTTP Client Internals ──

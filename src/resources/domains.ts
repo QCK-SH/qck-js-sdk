@@ -10,7 +10,9 @@ export class DomainsResource {
   /**
    * List all custom domains for the authenticated account.
    */
-  async list(): Promise<Domain[]> {
-    return this.client.get<Domain[]>('/domains');
+  async list(organizationId: string): Promise<Domain[]> {
+    return this.client.get<Domain[]>('/domains', {
+      params: { organizationId },
+    });
   }
 }

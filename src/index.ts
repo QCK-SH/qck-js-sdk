@@ -4,6 +4,7 @@ import { AnalyticsResource } from './resources/analytics.js';
 import { DomainsResource } from './resources/domains.js';
 import { WebhooksResource } from './resources/webhooks.js';
 import { JourneyResource } from './resources/journey.js';
+import { ConversionsResource } from './resources/conversions.js';
 import type { QCKConfig } from './types.js';
 
 /**
@@ -22,6 +23,7 @@ export class QCK {
   public readonly domains: DomainsResource;
   public readonly webhooks: WebhooksResource;
   public readonly journey: JourneyResource;
+  public readonly conversions: ConversionsResource;
 
   constructor(config: QCKConfig) {
     if (!config.apiKey) {
@@ -40,6 +42,7 @@ export class QCK {
     this.domains = new DomainsResource(client);
     this.webhooks = new WebhooksResource(client);
     this.journey = new JourneyResource(client);
+    this.conversions = new ConversionsResource(client);
   }
 }
 
@@ -82,9 +85,20 @@ export type {
   SessionEvent,
   ListJourneySessionsParams,
   ListJourneyEventsParams,
+  ConversionSummary,
+  ConversionTimeseriesPoint,
+  ConversionBreakdownEntry,
+  ConversionScopeParams,
+  ConversionTimeseriesParams,
+  ConversionBreakdownParams,
+  TrackConversionParams,
+  ConversionPeriod,
+  ConversionInterval,
+  ConversionDimension,
 } from './types.js';
 export { LinksResource } from './resources/links.js';
 export { AnalyticsResource } from './resources/analytics.js';
 export { DomainsResource } from './resources/domains.js';
 export { WebhooksResource } from './resources/webhooks.js';
 export { JourneyResource } from './resources/journey.js';
+export { ConversionsResource } from './resources/conversions.js';

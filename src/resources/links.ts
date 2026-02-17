@@ -56,7 +56,7 @@ export class LinksResource {
    * Bulk create multiple links at once.
    */
   async bulkCreate(params: BulkCreateParams): Promise<Link[]> {
-    return this.client.post<Link[]>('/links/bulk', params);
+    return this.client.post<Link[]>('/links/bulk', params.links);
   }
 
   /**
