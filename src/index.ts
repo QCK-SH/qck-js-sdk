@@ -95,6 +95,16 @@ export type {
   ConversionPeriod,
   ConversionInterval,
   ConversionDimension,
+  TimeToConvertData,
+  TimeToConvertBucket,
+  GeoAnalyticsEntry,
+  GeoAnalyticsParams,
+  DeviceAnalyticsEntry,
+  DeviceAnalyticsParams,
+  ReferrerAnalyticsEntry,
+  ReferrerAnalyticsParams,
+  HourlyAnalyticsEntry,
+  HourlyAnalyticsParams,
 } from './types.js';
 export { LinksResource } from './resources/links.js';
 export { AnalyticsResource } from './resources/analytics.js';

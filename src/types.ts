@@ -87,27 +87,77 @@ export interface AnalyticsSummaryParams {
   start_date?: string;
   end_date?: string;
   days?: number;
-  link_id?: string;
 }
 
 export interface AnalyticsSummary {
   total_clicks: number;
   unique_visitors: number;
-  top_countries: { country: string; clicks: number }[];
-  top_referrers: { referrer: string; clicks: number }[];
-  top_devices: { device: string; clicks: number }[];
+  total_links: number;
+  last_click_at: string | null;
+  today_clicks: number;
+  yesterday_clicks: number;
+  active_links: number;
+  total_links_count: number;
 }
 
 export interface TimeseriesParams {
   start_date?: string;
   end_date?: string;
   days?: number;
-  link_id?: string;
-  interval?: 'hour' | 'day' | 'week' | 'month';
 }
 
 export interface TimeseriesPoint {
   timestamp: string;
+  clicks: number;
+  unique_visitors: number;
+}
+
+export interface GeoAnalyticsParams {
+  days?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface GeoAnalyticsEntry {
+  country: string;
+  country_code: string;
+  clicks: number;
+  unique_visitors: number;
+}
+
+export interface DeviceAnalyticsParams {
+  days?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface DeviceAnalyticsEntry {
+  device_type: string;
+  browser: string;
+  os: string;
+  clicks: number;
+}
+
+export interface ReferrerAnalyticsParams {
+  days?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface ReferrerAnalyticsEntry {
+  referrer: string;
+  clicks: number;
+  unique_visitors: number;
+}
+
+export interface HourlyAnalyticsParams {
+  days?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface HourlyAnalyticsEntry {
+  hour: number;
   clicks: number;
   unique_visitors: number;
 }
@@ -269,7 +319,7 @@ export interface ConversionBreakdownParams extends ConversionScopeParams {
 export interface TrackConversionParams {
   link_id: string;
   visitor_id: string;
-  session_id?: string;
+  session_id: string;
   name: string;
   revenue?: number;
   currency?: string;
@@ -296,6 +346,17 @@ export interface ConversionBreakdownEntry {
   conversions: number;
   revenue: number;
   conversion_rate: number;
+}
+
+export interface TimeToConvertBucket {
+  label: string;
+  count: number;
+}
+
+export interface TimeToConvertData {
+  buckets: TimeToConvertBucket[];
+  average_seconds: number;
+  median_seconds: number;
 }
 
 // ── HTTP Client Internals ──

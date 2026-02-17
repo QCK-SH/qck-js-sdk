@@ -7,6 +7,7 @@ import type {
   ConversionTimeseriesParams,
   ConversionBreakdownParams,
   TrackConversionParams,
+  TimeToConvertData,
   JourneyEvent,
 } from '../types.js';
 
@@ -27,7 +28,7 @@ export class ConversionsResource {
     const event: JourneyEvent = {
       link_id: params.link_id,
       visitor_id: params.visitor_id,
-      session_id: params.session_id || '',
+      session_id: params.session_id,
       event_type: 'custom',
       event_name: params.name,
       page_url: params.page_url || '',
@@ -69,6 +70,16 @@ export class ConversionsResource {
    */
   async breakdown(params: ConversionBreakdownParams): Promise<ConversionBreakdownEntry[]> {
     return this.client.get<ConversionBreakdownEntry[]>('/conversions/breakdown', {
+      params: params as unknown as Record<string, string | number | undefined>,
+    });
+  }
+
+  /**
+   * Get time-to-convert distribution.
+   * Shows how long visitors take from first click to conversion.
+   */
+  async timeToConvert(params?: ConversionScopeParams): Promise<TimeToConvertData> {
+    return this.client.get<TimeToConvertData>('/conversions/time-to-convert', {
       params: params as unknown as Record<string, string | number | undefined>,
     });
   }
