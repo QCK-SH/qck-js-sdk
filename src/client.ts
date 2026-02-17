@@ -7,7 +7,7 @@ import {
 } from './errors.js';
 import type { ApiResponse, RequestOptions } from './types.js';
 
-const DEFAULT_BASE_URL = 'https://api.qck.sh/api/v1/developer';
+const DEFAULT_BASE_URL = 'https://api.qck.sh/public-api/v1';
 const DEFAULT_TIMEOUT = 30_000;
 const DEFAULT_RETRIES = 3;
 const MAX_RETRY_DELAY_MS = 120_000;
