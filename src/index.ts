@@ -11,20 +11,62 @@ import type { QCKConfig } from './types.js';
  * QCK SDK client. Initialize with your API key and use the
  * resource namespaces to interact with the QCK Developer API.
  *
+ * @description The main entry point for the QCK JavaScript/TypeScript SDK.
+ * Each resource namespace (`links`, `analytics`, `domains`, `webhooks`,
+ * `journey`, `conversions`) provides methods for the corresponding API
+ * endpoints.
+ *
  * @example
  * ```ts
+ * import { QCK } from '@qck/sdk';
+ *
  * const qck = new QCK({ apiKey: 'qck_...' });
+ *
+ * // Create a short link
  * const link = await qck.links.create({ url: 'https://example.com' });
+ *
+ * // Get analytics
+ * const summary = await qck.analytics.summary({ days: 30 });
+ *
+ * // Track a conversion
+ * await qck.conversions.track({
+ *   link_id: link.id,
+ *   visitor_id: 'vis_123',
+ *   session_id: 'ses_456',
+ *   name: 'purchase',
+ *   revenue: 49.99,
+ * });
  * ```
  */
 export class QCK {
+  /** Resource for creating, listing, updating, and deleting short links. */
   public readonly links: LinksResource;
+  /** Resource for querying click analytics, timeseries, geo, device, referrer, and hourly data. */
   public readonly analytics: AnalyticsResource;
+  /** Resource for listing custom domains. */
   public readonly domains: DomainsResource;
+  /** Resource for managing webhook endpoints and viewing delivery history. */
   public readonly webhooks: WebhooksResource;
+  /** Resource for ingesting journey events and analyzing visitor sessions and funnels. */
   public readonly journey: JourneyResource;
+  /** Resource for tracking and querying conversion analytics. */
   public readonly conversions: ConversionsResource;
 
+  /**
+   * Create a new QCK SDK client.
+   *
+   * @param config - Configuration options including the API key.
+   * @throws {Error} If `apiKey` is not provided.
+   *
+   * @example
+   * ```ts
+   * const qck = new QCK({
+   *   apiKey: 'qck_live_abc123',
+   *   timeout: 10_000,   // 10 second timeout
+   *   retries: 5,        // retry up to 5 times
+   * });
+   * ```
+   */
   constructor(config: QCKConfig) {
     if (!config.apiKey) {
       throw new Error('QCK SDK requires an API key. Pass { apiKey: "qck_..." } to the constructor.');
