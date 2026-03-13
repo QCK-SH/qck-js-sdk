@@ -65,8 +65,18 @@ export interface UpdateLinkParams {
 
 export interface ListLinksParams {
   page?: number;
-  limit?: number;
+  per_page?: number;
   search?: string;
+  tags?: string[];
+  is_active?: boolean;
+  has_password?: boolean;
+  domain?: string;
+  domain_id?: string;
+  created_after?: string;
+  created_before?: string;
+  last_active_after?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 export interface BulkCreateParams {
@@ -87,6 +97,8 @@ export interface AnalyticsSummaryParams {
   start_date?: string;
   end_date?: string;
   days?: number;
+  bot_filter?: 'real' | 'bot' | 'all';
+  domain_name?: string;
 }
 
 export interface AnalyticsSummary {
@@ -104,6 +116,8 @@ export interface TimeseriesParams {
   start_date?: string;
   end_date?: string;
   days?: number;
+  bot_filter?: 'real' | 'bot' | 'all';
+  domain_name?: string;
 }
 
 export interface TimeseriesPoint {
@@ -116,6 +130,8 @@ export interface GeoAnalyticsParams {
   days?: number;
   start_date?: string;
   end_date?: string;
+  bot_filter?: 'real' | 'bot' | 'all';
+  domain_name?: string;
 }
 
 export interface GeoAnalyticsEntry {
@@ -129,6 +145,8 @@ export interface DeviceAnalyticsParams {
   days?: number;
   start_date?: string;
   end_date?: string;
+  bot_filter?: 'real' | 'bot' | 'all';
+  domain_name?: string;
 }
 
 export interface DeviceAnalyticsEntry {
@@ -142,6 +160,8 @@ export interface ReferrerAnalyticsParams {
   days?: number;
   start_date?: string;
   end_date?: string;
+  bot_filter?: 'real' | 'bot' | 'all';
+  domain_name?: string;
 }
 
 export interface ReferrerAnalyticsEntry {
@@ -154,6 +174,8 @@ export interface HourlyAnalyticsParams {
   days?: number;
   start_date?: string;
   end_date?: string;
+  bot_filter?: 'real' | 'bot' | 'all';
+  domain_name?: string;
 }
 
 export interface HourlyAnalyticsEntry {
@@ -170,6 +192,79 @@ export interface Domain {
   is_verified: boolean;
   is_default: boolean;
   created_at: string;
+}
+
+// ── Webhook Event Types ──
+
+/**
+ * All supported webhook event types.
+ * Use these constants when creating or updating webhook endpoints
+ * instead of raw strings.
+ */
+export const WebhookEvents = {
+  // Links
+  LINK_CREATED: 'link.created',
+  LINK_UPDATED: 'link.updated',
+  LINK_DELETED: 'link.deleted',
+  LINK_EXPIRED: 'link.expired',
+  // Domains
+  DOMAIN_VERIFIED: 'domain.verified',
+  DOMAIN_EXPIRED: 'domain.expired',
+  DOMAIN_SUSPENDED: 'domain.suspended',
+  // API Keys
+  API_KEY_CREATED: 'api_key.created',
+  API_KEY_REVOKED: 'api_key.revoked',
+  // Team
+  TEAM_MEMBER_ADDED: 'team.member_added',
+  TEAM_MEMBER_REMOVED: 'team.member_removed',
+  // Billing
+  SUBSCRIPTION_UPGRADED: 'subscription.upgraded',
+  SUBSCRIPTION_DOWNGRADED: 'subscription.downgraded',
+  // Bulk
+  BULK_IMPORT_COMPLETED: 'bulk_import.completed',
+} as const;
+
+export type WebhookEventType = (typeof WebhookEvents)[keyof typeof WebhookEvents];
+
+/**
+ * Webhook events grouped by category for convenient bulk-subscription.
+ */
+export const WebhookEventCategories = {
+  links: [
+    WebhookEvents.LINK_CREATED,
+    WebhookEvents.LINK_UPDATED,
+    WebhookEvents.LINK_DELETED,
+    WebhookEvents.LINK_EXPIRED,
+  ],
+  domains: [
+    WebhookEvents.DOMAIN_VERIFIED,
+    WebhookEvents.DOMAIN_EXPIRED,
+    WebhookEvents.DOMAIN_SUSPENDED,
+  ],
+  api_keys: [
+    WebhookEvents.API_KEY_CREATED,
+    WebhookEvents.API_KEY_REVOKED,
+  ],
+  team: [
+    WebhookEvents.TEAM_MEMBER_ADDED,
+    WebhookEvents.TEAM_MEMBER_REMOVED,
+  ],
+  billing: [
+    WebhookEvents.SUBSCRIPTION_UPGRADED,
+    WebhookEvents.SUBSCRIPTION_DOWNGRADED,
+  ],
+  bulk: [
+    WebhookEvents.BULK_IMPORT_COMPLETED,
+  ],
+} as const;
+
+/**
+ * Shape of a webhook delivery payload received at your endpoint.
+ */
+export interface WebhookPayload<T = unknown> {
+  event: WebhookEventType;
+  timestamp: string;
+  data: T;
 }
 
 // ── Webhooks ──
@@ -362,5 +457,5 @@ export interface TimeToConvertData {
 // ── HTTP Client Internals ──
 
 export interface RequestOptions {
-  params?: Record<string, string | number | boolean | undefined>;
+  params?: Record<string, string | number | boolean | string[] | undefined>;
 }

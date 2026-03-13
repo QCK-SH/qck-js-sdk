@@ -164,13 +164,18 @@ export class HttpClient {
 
   private buildUrl(
     path: string,
-    params?: Record<string, string | number | boolean | undefined>,
+    params?: Record<string, string | number | boolean | string[] | undefined>,
   ): string {
     const url = new URL(`${this.baseUrl}${path}`);
 
     if (params) {
       for (const [key, value] of Object.entries(params)) {
-        if (value !== undefined) {
+        if (value === undefined) continue;
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            url.searchParams.append(key, item);
+          }
+        } else {
           url.searchParams.set(key, String(value));
         }
       }

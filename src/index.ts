@@ -55,6 +55,10 @@ export {
   NotFoundError,
   ValidationError,
 } from './errors.js';
+export {
+  WebhookEvents,
+  WebhookEventCategories,
+} from './types.js';
 export type {
   QCKConfig,
   Link,
@@ -73,6 +77,8 @@ export type {
   UpdateWebhookParams,
   WebhookDelivery,
   ListWebhookDeliveriesParams,
+  WebhookEventType,
+  WebhookPayload,
   PaginatedResponse,
   JourneyEvent,
   IngestEventsParams,

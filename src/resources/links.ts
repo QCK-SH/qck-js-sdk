@@ -23,11 +23,11 @@ export class LinksResource {
   }
 
   /**
-   * List all links with optional pagination and search.
+   * List links with optional filtering, pagination, and sorting.
    */
   async list(params?: ListLinksParams): Promise<PaginatedResponse<Link>> {
     return this.client.get<PaginatedResponse<Link>>('/links', {
-      params: params as Record<string, string | number | undefined>,
+      params: params as Record<string, string | number | boolean | string[] | undefined>,
     });
   }
 
