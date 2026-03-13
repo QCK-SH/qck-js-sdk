@@ -62,6 +62,7 @@ export {
 export type {
   QCKConfig,
   Link,
+  LinkMetadata,
   CreateLinkParams,
   UpdateLinkParams,
   ListLinksParams,

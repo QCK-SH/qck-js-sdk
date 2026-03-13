@@ -29,6 +29,15 @@ export interface PaginatedResponse<T> {
 
 // ── Links ──
 
+export interface LinkMetadata {
+  title?: string;
+  description?: string;
+  og_image?: string;
+  domain: string;
+  is_safe: boolean;
+  tags: string[];
+}
+
 export interface Link {
   id: string;
   short_code: string;
@@ -36,12 +45,19 @@ export interface Link {
   short_url: string;
   title?: string;
   description?: string;
-  tags?: string[];
-  is_active: boolean;
   expires_at?: string;
-  click_count: number;
   created_at: string;
   updated_at: string;
+  is_active: boolean;
+  tags: string[];
+  is_password_protected: boolean;
+  metadata: LinkMetadata;
+  total_clicks: number;
+  unique_visitors: number;
+  bot_clicks: number;
+  last_accessed_at?: string;
+  domain_id?: string;
+  domain_name?: string;
 }
 
 export interface CreateLinkParams {
@@ -49,18 +65,30 @@ export interface CreateLinkParams {
   custom_alias?: string;
   title?: string;
   description?: string;
+  og_image?: string;
   tags?: string[];
   expires_at?: string;
+  is_password_protected?: boolean;
+  password?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_term?: string;
+  utm_content?: string;
   domain_id?: string;
 }
 
 export interface UpdateLinkParams {
-  original_url?: string;
+  url?: string;
+  custom_alias?: string;
   title?: string;
   description?: string;
-  tags?: string[];
+  og_image?: string;
+  expires_at?: string | null;
   is_active?: boolean;
-  expires_at?: string;
+  tags?: string[];
+  is_password_protected?: boolean;
+  password?: string;
 }
 
 export interface ListLinksParams {
@@ -273,11 +301,13 @@ export interface WebhookEndpoint {
   id: string;
   url: string;
   events: string[];
-  description?: string;
   is_active: boolean;
+  description?: string;
   consecutive_failures: number;
+  last_failure_at?: string;
   created_at: string;
   updated_at: string;
+  secret?: string;
 }
 
 export interface CreateWebhookParams {
