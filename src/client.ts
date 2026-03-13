@@ -51,6 +51,23 @@ export class HttpClient {
     return this.request<T>('PATCH', path, body, options);
   }
 
+  async put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return this.request<T>('PUT', path, body, options);
+  }
+
+  /**
+   * Send a PUT request with a raw (non-JSON) body.
+   * Used for binary uploads (e.g., OG image).
+   */
+  async putRaw<T>(
+    path: string,
+    body: Blob | ArrayBuffer | Uint8Array,
+    contentType: string,
+    options?: RequestOptions,
+  ): Promise<T> {
+    return this.requestRaw<T>('PUT', path, body, contentType, options);
+  }
+
   async delete<T = void>(path: string, options?: RequestOptions): Promise<T> {
     return this.request<T>('DELETE', path, undefined, options);
   }
@@ -155,6 +172,98 @@ export class HttpClient {
         }
 
         // Exponential backoff for network errors
+        await sleep(Math.min(1000 * 2 ** attempt, 10_000));
+      }
+    }
+
+    throw lastError ?? new QCKError('Request failed', 0, 'UNKNOWN');
+  }
+
+  /**
+   * Like `request` but sends a raw (non-JSON) body with a given Content-Type.
+   * Used for binary file uploads.
+   */
+  private async requestRaw<T>(
+    method: string,
+    path: string,
+    body: Blob | ArrayBuffer | Uint8Array,
+    contentType: string,
+    options?: RequestOptions,
+  ): Promise<T> {
+    const url = this.buildUrl(path, options?.params);
+
+    const headers: Record<string, string> = {
+      'X-API-Key': this.apiKey,
+      'Accept': 'application/json',
+      'Content-Type': contentType,
+    };
+
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= this.retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+        const response = await fetch(url, {
+          method,
+          headers,
+          body: body as BodyInit,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.status === 429) {
+          const retryAfter = parseRetryAfter(response.headers.get('Retry-After'));
+          if (attempt < this.retries) {
+            await sleep(Math.min(retryAfter * 1000, MAX_RETRY_DELAY_MS));
+            continue;
+          }
+          throw new RateLimitError('Rate limit exceeded', retryAfter);
+        }
+
+        if (!response.ok) {
+          throw await this.mapError(response);
+        }
+
+        if (response.status === 204 || response.headers.get('content-length') === '0') {
+          return undefined as unknown as T;
+        }
+
+        const json = (await response.json()) as ApiResponse<T>;
+
+        if (!json.success && json.error) {
+          throw new QCKError(json.error.message, response.status, json.error.code);
+        }
+
+        return json.data as T;
+      } catch (err: unknown) {
+        if (err instanceof RateLimitError && attempt >= this.retries) {
+          throw err;
+        }
+
+        if (err instanceof QCKError) {
+          throw err;
+        }
+
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          lastError = new QCKError('Request timed out', 0, 'TIMEOUT');
+          if (attempt >= this.retries) {
+            throw lastError;
+          }
+          continue;
+        }
+
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (attempt >= this.retries) {
+          throw new QCKError(
+            `Network error: ${lastError.message}`,
+            0,
+            'NETWORK_ERROR',
+          );
+        }
+
         await sleep(Math.min(1000 * 2 ** attempt, 10_000));
       }
     }

@@ -65,4 +65,33 @@ export class LinksResource {
   async getStats(id: string): Promise<LinkStats> {
     return this.client.get<LinkStats>(`/links/${id}/stats`);
   }
+
+  /**
+   * Upload or replace the OG image for a link.
+   * Accepts a File, Blob, ArrayBuffer, or Uint8Array containing the image data.
+   *
+   * @returns The public URL of the uploaded OG image.
+   */
+  async uploadOgImage(
+    id: string,
+    file: Blob | ArrayBuffer | Uint8Array,
+  ): Promise<{ og_image: string }> {
+    const contentType =
+      file instanceof Blob
+        ? file.type || 'application/octet-stream'
+        : 'application/octet-stream';
+
+    return this.client.putRaw<{ og_image: string }>(
+      `/links/${id}/og-image`,
+      file,
+      contentType,
+    );
+  }
+
+  /**
+   * Delete the OG image for a link.
+   */
+  async deleteOgImage(id: string): Promise<void> {
+    return this.client.delete(`/links/${id}/og-image`);
+  }
 }
