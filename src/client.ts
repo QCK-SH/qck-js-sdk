@@ -191,6 +191,10 @@ export class HttpClient {
       headers['Content-Type'] = 'application/json';
     }
 
+    if (options?.headers) {
+      Object.assign(headers, options.headers);
+    }
+
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {

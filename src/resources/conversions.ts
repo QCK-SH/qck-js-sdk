@@ -24,7 +24,7 @@ import type {
  *
  * // Track a purchase conversion
  * await qck.conversions.track({
- *   link_id: 'link-uuid',
+ *   short_code: 'abc123',
  *   visitor_id: 'vis_123',
  *   session_id: 'ses_456',
  *   name: 'purchase',
@@ -48,7 +48,6 @@ export class ConversionsResource {
    * with event_type set to 'conversion'.
    *
    * Use this from server-side code, mobile apps, or any HTTP client.
-   * For browser-side tracking, use the qck-tracker.js snippet instead.
    *
    * @param params - Conversion event details including link, visitor, and revenue data.
    * @throws {ValidationError} If required fields are missing.
@@ -57,30 +56,27 @@ export class ConversionsResource {
    * @example
    * ```ts
    * await qck.conversions.track({
-   *   link_id: 'link-uuid',
+   *   short_code: 'abc123',
    *   visitor_id: 'vis_abc',
    *   session_id: 'ses_xyz',
    *   name: 'signup',
    *   page_url: 'https://example.com/thank-you',
-   *   event_data: { plan: 'pro' },
+   *   properties: { plan: 'pro' },
    * });
    * ```
    */
   async track(params: TrackConversionParams): Promise<void> {
     const event: JourneyEvent = {
-      link_id: params.link_id,
+      short_code: params.short_code,
       visitor_id: params.visitor_id,
       session_id: params.session_id,
-      event_type: 'custom',
+      event_type: 'conversion',
       event_name: params.name,
       page_url: params.page_url || '',
-      event_data: {
-        ...(params.event_data || {}),
-        name: params.name,
-        revenue: String(params.revenue ?? '0'),
-        currency: params.currency || 'USD',
-        event_type_override: 'conversion',
-      },
+      conversion_name: params.name,
+      revenue_cents: Math.round((params.revenue ?? 0) * 100),
+      currency: params.currency || 'USD',
+      properties: params.properties || {},
     };
 
     return this.client.post('/journey/events', { events: [event] });
@@ -88,7 +84,7 @@ export class ConversionsResource {
 
   /**
    * Get conversion summary metrics.
-   * Scope by domain_id and/or link_id, or omit both for org-wide data.
+   * Scope by domain_id and/or short_code, or omit both for org-wide data.
    *
    * @param params - Optional scope and period parameters.
    * @returns Aggregated conversion metrics including totals, revenue, and conversion rate.
@@ -100,7 +96,7 @@ export class ConversionsResource {
    *
    * // Summary for a specific link
    * const linkSummary = await qck.conversions.summary({
-   *   link_id: 'link-uuid',
+   *   short_code: 'abc123',
    *   period: '7d',
    * });
    * ```

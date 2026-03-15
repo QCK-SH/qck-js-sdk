@@ -206,51 +206,39 @@ for (const entry of hourly) {
 Track and analyze conversion events tied to your links.
 
 ```typescript
-// Track a conversion (server-side)
+// Track a conversion
 await qck.conversions.track({
-  link_id: 'link_id',              // required
-  visitor_id: 'vis_abc123',        // required
-  session_id: 'sess_xyz',          // required
-  name: 'purchase',                // required — conversion event name
-  revenue: 49.99,                  // optional
+  short_code: 'abc123',            // required — link short code
+  visitor_id: 'user-456',          // required — your user ID
+  name: 'purchase',                // required — conversion name
+  session_id: 'sess-789',          // optional — enables session analytics
+  revenue: 49.99,                  // optional — dollars, converted to cents internally
   currency: 'USD',                 // optional (default: 'USD')
-  page_url: 'https://example.com/checkout', // optional
-  event_data: { plan: 'pro' },     // optional — arbitrary metadata
+  page_url: '/checkout',           // optional — page or screen
+  properties: { plan: 'pro' },     // optional — stored in ClickHouse JSON column
 });
 
-// Conversion summary
+// Conversion summary (org-wide or scoped)
 const summary = await qck.conversions.summary({
   period: '30d',                   // '7d' | '30d' | '90d'
-  domain_id: 'dom_123',           // optional
-  link_id: 'link_id',             // optional
+  short_code: 'abc123',            // optional — scope to a link
 });
-// summary.total_conversions, summary.unique_converters
-// summary.total_revenue, summary.average_order_value, summary.conversion_rate
 
 // Conversion timeseries
 const points = await qck.conversions.timeseries({
   period: '30d',
   interval: 'day',                 // 'hour' | 'day' | 'week' | 'month'
 });
-for (const point of points) {
-  console.log(`${point.timestamp}: ${point.conversions} conversions, $${point.revenue}`);
-}
 
 // Breakdown by dimension
 const bySource = await qck.conversions.breakdown({
-  dimension: 'source',             // 'source' | 'device' | 'country' | 'link' | 'name'
+  dimension: 'name',               // 'source' | 'device' | 'country' | 'link' | 'name'
   period: '30d',
 });
-for (const entry of bySource) {
-  console.log(`${entry.label}: ${entry.conversions} (${(entry.conversion_rate * 100).toFixed(1)}%)`);
-}
 
 // Time-to-convert analysis
 const ttc = await qck.conversions.timeToConvert({ period: '30d' });
-console.log(`Average: ${ttc.average_seconds}s, Median: ${ttc.median_seconds}s`);
-for (const bucket of ttc.buckets) {
-  console.log(`${bucket.label}: ${bucket.count} conversions`);
-}
+// ttc.average_seconds, ttc.median_seconds, ttc.buckets
 ```
 
 #### Conversions API Reference
@@ -265,84 +253,140 @@ for (const bucket of ttc.buckets) {
 
 ### Journey Tracking
 
-Track user journeys across pages after clicking a link. Supports event ingestion, funnel analysis, and session replay.
+Track visitor journeys from any platform — websites, mobile apps, server-side. After a user clicks your QCK short link, they're redirected to your destination with `?qck_id=<short_code>` in the URL. Read this param to attribute journey events.
+
+**Event types** (Enum — must be one of these):
+
+| Type | Use for | Key fields |
+|------|---------|------------|
+| `page_view` | Page/screen loads | `page_url`, `page_title` |
+| `scroll_depth` | Scroll tracking | `scroll_percent` (0-100) |
+| `time_on_page` | Time on page/screen | `time_on_page` (seconds) |
+| `custom` | Any user-defined event | `event_name`, `properties` |
+| `conversion` | Purchase, signup, lead | `conversion_name`, `revenue_cents`, `currency` |
 
 ```typescript
-// Ingest journey events
+// Read the short code from the redirect URL
+const shortCode = new URLSearchParams(window.location.search).get('qck_id');
+
+// Ingest journey events (batch up to 100 per request)
 await qck.journey.ingest({
   events: [
+    // Page view
     {
-      link_id: 'link_id',           // required
-      visitor_id: 'vis_abc123',     // required
-      session_id: 'sess_1',        // required
-      event_type: 'page_view',     // 'page_view' | 'scroll_depth' | 'time_on_page' | 'custom' | 'conversion'
-      page_url: 'https://example.com/pricing',
-      page_title: 'Pricing',       // optional
-      referrer_url: 'https://google.com', // optional
+      short_code: 'abc123',
+      visitor_id: 'user-456',
+      session_id: 'sess-789',       // optional
+      event_type: 'page_view',
+      page_url: '/pricing',
+      page_title: 'Pricing',
     },
+    // Scroll depth
     {
-      link_id: 'link_id',
-      visitor_id: 'vis_abc123',
-      session_id: 'sess_1',
+      short_code: 'abc123',
+      visitor_id: 'user-456',
+      session_id: 'sess-789',
       event_type: 'scroll_depth',
-      page_url: 'https://example.com/pricing',
-      scroll_percent: 75,          // 0-100
+      page_url: '/pricing',
+      scroll_percent: 75,
     },
+    // Time on page (seconds)
     {
-      link_id: 'link_id',
-      visitor_id: 'vis_abc123',
-      session_id: 'sess_1',
+      short_code: 'abc123',
+      visitor_id: 'user-456',
+      session_id: 'sess-789',
+      event_type: 'time_on_page',
+      page_url: '/pricing',
+      time_on_page: 45,
+    },
+    // Custom event with properties
+    {
+      short_code: 'abc123',
+      visitor_id: 'user-456',
       event_type: 'custom',
-      event_name: 'cta_click',     // required for 'custom' events
-      page_url: 'https://example.com/pricing',
-      event_data: { button: 'hero' }, // optional metadata
+      event_name: 'cta_click',
+      page_url: '/pricing',
+      properties: { button: 'hero', variant: 'B' },
+    },
+    // Conversion with revenue
+    {
+      short_code: 'abc123',
+      visitor_id: 'user-456',
+      event_type: 'conversion',
+      conversion_name: 'purchase',
+      revenue_cents: 4999,           // $49.99
+      currency: 'USD',
+      page_url: '/checkout/success',
+      properties: { plan: 'pro', coupon: 'SAVE20' },
     },
   ],
 });
 
-// Link journey summary
-const summary = await qck.journey.getSummary('link_id', { period: '30d' });
-// summary.total_visitors, summary.total_sessions, summary.total_events
-// summary.avg_session_duration_seconds
-// summary.top_pages: [{ url, count }]
-// summary.top_events: [{ name, count }]
+// Context fields (all optional — your data, you provide it)
+await qck.journey.ingest({
+  events: [{
+    short_code: 'abc123',
+    visitor_id: 'user-456',
+    event_type: 'page_view',
+    page_url: '/home',
+    country_code: 'US',             // 2-char ISO 3166-1
+    city: 'San Francisco',
+    region: 'California',
+    device_type: 'mobile',          // mobile | desktop | tablet
+    browser: 'Chrome',
+    browser_version: '120.0',
+    os: 'iOS',
+    os_version: '17.2',
+  }],
+});
+
+// Journey summary for a link
+const summary = await qck.journey.getSummary('abc123', { period: '30d' });
 
 // Funnel analysis
-const funnel = await qck.journey.getFunnel('link_id', {
+const funnel = await qck.journey.getFunnel('abc123', {
   steps: ['page_view', 'cta_click', 'purchase'],
   period: '30d',
 });
-// funnel.total_visitors
-for (const step of funnel.steps) {
-  console.log(`${step.step_name}: ${step.visitors} (${(step.conversion_rate * 100).toFixed(1)}%)`);
-}
 
 // List sessions (paginated)
-const sessions = await qck.journey.listSessions('link_id', {
+const sessions = await qck.journey.listSessions('abc123', {
   period: '7d',
   limit: 10,
-  visitor_id: 'vis_abc123',       // optional, filter by visitor
 });
-// sessions.data: SessionSummary[]
 
 // List events (paginated)
-const events = await qck.journey.listEvents('link_id', {
-  event_type: 'custom',           // optional filter
+const events = await qck.journey.listEvents('abc123', {
+  event_type: 'custom',
   period: '7d',
-  limit: 50,
 });
-// events.data: JourneyEvent[]
+```
+
+**cURL example:**
+
+```bash
+curl -X POST https://qck.sh/public-api/v1/journey/events \
+  -H "X-API-Key: qck_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": [{
+      "short_code": "abc123",
+      "visitor_id": "user-456",
+      "event_type": "page_view",
+      "page_url": "/pricing"
+    }]
+  }'
 ```
 
 #### Journey API Reference
 
 | Method | Parameters | Returns | Description |
 |--------|-----------|---------|-------------|
-| `ingest(params)` | `IngestEventsParams` | `Promise<void>` | Batch ingest journey events |
-| `getSummary(linkId, params?)` | `string, JourneyQueryParams` | `Promise<JourneyLinkSummary>` | Link journey summary |
-| `getFunnel(linkId, params)` | `string, FunnelParams` | `Promise<FunnelResult>` | Funnel analysis |
-| `listSessions(linkId, params?)` | `string, ListJourneySessionsParams` | `Promise<PaginatedResponse<SessionSummary>>` | List visitor sessions |
-| `listEvents(linkId, params?)` | `string, ListJourneyEventsParams` | `Promise<PaginatedResponse<JourneyEvent>>` | List journey events |
+| `ingest(params)` | `IngestEventsParams` | `Promise<void>` | Batch ingest journey events (1-100) |
+| `getSummary(shortCode, params?)` | `string, JourneyQueryParams` | `Promise<JourneyLinkSummary>` | Link journey summary |
+| `getFunnel(shortCode, params)` | `string, FunnelParams` | `Promise<FunnelResult>` | Funnel analysis |
+| `listSessions(shortCode, params?)` | `string, ListJourneySessionsParams` | `Promise<PaginatedResponse<SessionSummary>>` | List visitor sessions |
+| `listEvents(shortCode, params?)` | `string, ListJourneyEventsParams` | `Promise<PaginatedResponse<JourneyEvent>>` | List journey events |
 
 ### Webhooks
 

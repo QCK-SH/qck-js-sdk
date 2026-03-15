@@ -448,6 +448,9 @@ export const WebhookEvents = {
   // Bulk
   /** Fired when a bulk import operation completes. */
   BULK_IMPORT_COMPLETED: 'bulk_import.completed',
+  // Journey
+  /** Fired when a conversion event is tracked via the journey SDK. */
+  CONVERSION: 'conversion',
 } as const;
 
 /** Union type of all valid webhook event type strings. */
@@ -499,6 +502,10 @@ export const WebhookEventCategories = {
   /** All bulk operation events (import completed). */
   bulk: [
     WebhookEvents.BULK_IMPORT_COMPLETED,
+  ],
+  /** All journey events (conversion). */
+  journey: [
+    WebhookEvents.CONVERSION,
   ],
 } as const;
 
@@ -596,30 +603,50 @@ export interface ListWebhookDeliveriesParams {
 
 /** A single visitor journey event to be ingested or returned from queries. */
 export interface JourneyEvent {
-  /** ID of the short link that initiated this journey. */
-  link_id: string;
-  /** Unique identifier for the visitor (persisted across sessions). */
+  /** Short code of the QCK link (e.g. "abc123"). Read from `?qck_id=` URL param after redirect. */
+  short_code: string;
+  /** Unique visitor identifier (user-managed — your user ID, device UUID, etc.). */
   visitor_id: string;
-  /** Unique identifier for the current browsing session. */
-  session_id: string;
+  /** Session identifier (optional — enables session analytics and funnel analysis when provided). */
+  session_id?: string;
   /** Type of event being tracked. */
   event_type: 'page_view' | 'scroll_depth' | 'time_on_page' | 'custom' | 'conversion';
-  /** Custom event name, used when `event_type` is `'custom'` or `'conversion'`. */
+  /** Event name for custom/conversion events (e.g. "signup", "purchase"). */
   event_name?: string;
-  /** URL of the page where the event occurred. */
+  /** Page URL (web) or screen/route name (mobile/server). */
   page_url: string;
-  /** Title of the page where the event occurred. */
+  /** Page title or screen title. */
   page_title?: string;
-  /** Referrer URL for this page view. */
-  referrer_url?: string;
-  /** Arbitrary key-value data associated with the event. */
-  event_data?: Record<string, unknown>;
   /** Scroll depth percentage (0-100) for `'scroll_depth'` events. */
   scroll_percent?: number;
   /** Time spent on the page in seconds for `'time_on_page'` events. */
   time_on_page?: number;
-  /** ISO 8601 timestamp of the event. Defaults to server time if omitted. */
+  /** ISO 8601 timestamp. Defaults to server time if omitted. */
   timestamp?: string;
+  /** Conversion name (e.g. "purchase"). Set for conversion events. */
+  conversion_name?: string;
+  /** Revenue in cents (integer). $49.99 → 4999. */
+  revenue_cents?: number;
+  /** ISO 4217 currency code. @default 'USD' */
+  currency?: string;
+  /** Country code (2-char ISO 3166-1, e.g. "US"). */
+  country_code?: string;
+  /** City name. */
+  city?: string;
+  /** State/province. */
+  region?: string;
+  /** Device type (e.g. "mobile", "desktop", "tablet"). */
+  device_type?: string;
+  /** Browser name (e.g. "Chrome", "Safari"). */
+  browser?: string;
+  /** Browser version. */
+  browser_version?: string;
+  /** OS name (e.g. "iOS", "Windows"). */
+  os?: string;
+  /** OS version (e.g. "17.0", "11"). */
+  os_version?: string;
+  /** Arbitrary properties. Stored in ClickHouse JSON column with auto-indexed sub-columns. */
+  properties?: Record<string, unknown>;
 }
 
 /** Parameters for ingesting a batch of journey events. */
@@ -751,8 +778,8 @@ export interface ConversionScopeParams {
   period?: ConversionPeriod;
   /** Filter conversions to a specific custom domain. */
   domain_id?: string;
-  /** Filter conversions to a specific link. */
-  link_id?: string;
+  /** Filter conversions to a specific link by short code. */
+  short_code?: string;
 }
 
 /** Parameters for retrieving conversion timeseries data. */
@@ -769,22 +796,22 @@ export interface ConversionBreakdownParams extends ConversionScopeParams {
 
 /** Parameters for tracking a conversion event via the SDK. */
 export interface TrackConversionParams {
-  /** ID of the short link that led to this conversion. */
-  link_id: string;
-  /** Unique identifier for the visitor who converted. */
+  /** Short code of the QCK link (e.g. "abc123"). */
+  short_code: string;
+  /** Unique visitor identifier (your user ID, device UUID, etc.). */
   visitor_id: string;
-  /** Session ID in which the conversion occurred. */
-  session_id: string;
+  /** Session identifier (optional). */
+  session_id?: string;
   /** Conversion event name (e.g. `'purchase'`, `'signup'`). */
   name: string;
-  /** Revenue amount associated with this conversion. @default 0 */
+  /** Revenue amount in dollars (e.g. 49.99). Converted to cents internally. @default 0 */
   revenue?: number;
   /** ISO 4217 currency code for the revenue. @default 'USD' */
   currency?: string;
-  /** URL of the page where the conversion occurred. */
+  /** URL or screen/route where the conversion occurred. */
   page_url?: string;
-  /** Arbitrary key-value data to attach to the conversion event. */
-  event_data?: Record<string, unknown>;
+  /** Arbitrary properties to attach to the conversion event. */
+  properties?: Record<string, unknown>;
 }
 
 /** Aggregated conversion summary metrics. */
@@ -847,4 +874,6 @@ export interface TimeToConvertData {
 export interface RequestOptions {
   /** Query string parameters to append to the request URL. `undefined` values are omitted. */
   params?: Record<string, string | number | boolean | string[] | undefined>;
+  /** Additional HTTP headers to include in the request. */
+  headers?: Record<string, string>;
 }

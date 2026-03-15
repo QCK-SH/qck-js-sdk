@@ -30,9 +30,8 @@ import type { QCKConfig } from './types.js';
  *
  * // Track a conversion
  * await qck.conversions.track({
- *   link_id: link.id,
- *   visitor_id: 'vis_123',
- *   session_id: 'ses_456',
+ *   short_code: link.short_code,
+ *   visitor_id: 'user-123',
  *   name: 'purchase',
  *   revenue: 49.99,
  * });
