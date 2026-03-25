@@ -24,7 +24,7 @@ import type {
  *
  * // Track a purchase conversion
  * await qck.conversions.track({
- *   short_code: 'abc123',
+ *   link_id: 'your-link-uuid',
  *   visitor_id: 'vis_123',
  *   session_id: 'ses_456',
  *   name: 'purchase',
@@ -56,7 +56,7 @@ export class ConversionsResource {
    * @example
    * ```ts
    * await qck.conversions.track({
-   *   short_code: 'abc123',
+   *   link_id: 'your-link-uuid',
    *   visitor_id: 'vis_abc',
    *   session_id: 'ses_xyz',
    *   name: 'signup',
@@ -67,7 +67,7 @@ export class ConversionsResource {
    */
   async track(params: TrackConversionParams): Promise<void> {
     const event: JourneyEvent = {
-      short_code: params.short_code,
+      link_id: params.link_id,
       visitor_id: params.visitor_id,
       session_id: params.session_id,
       event_type: 'conversion',
@@ -84,7 +84,7 @@ export class ConversionsResource {
 
   /**
    * Get conversion summary metrics.
-   * Scope by domain_id and/or short_code, or omit both for org-wide data.
+   * Scope by domain_id and/or link_id, or omit both for org-wide data.
    *
    * @param params - Optional scope and period parameters.
    * @returns Aggregated conversion metrics including totals, revenue, and conversion rate.
@@ -96,7 +96,7 @@ export class ConversionsResource {
    *
    * // Summary for a specific link
    * const linkSummary = await qck.conversions.summary({
-   *   short_code: 'abc123',
+   *   link_id: 'your-link-uuid',
    *   period: '7d',
    * });
    * ```

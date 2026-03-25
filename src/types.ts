@@ -75,7 +75,7 @@ export interface Link {
   /** Unique identifier for the link (UUID). */
   id: string;
   /** The generated or custom short code (e.g. `'abc123'`). */
-  short_code: string;
+  link_id: string;
   /** The destination URL that the short link redirects to. */
   original_url: string;
   /** The full short URL including the domain (e.g. `'https://qck.sh/abc123'`). */
@@ -206,18 +206,32 @@ export interface BulkCreateParams {
   links: CreateLinkParams[];
 }
 
-/** Click statistics for a specific link, broken down by geography, device, and referrer. */
+/** Click statistics for a specific link. */
 export interface LinkStats {
+  /** The link's short code (e.g. `'abc123'`). */
+  short_code: string;
+  /** The destination URL the short link redirects to. */
+  original_url: string;
   /** Total number of clicks on the link. */
   total_clicks: number;
-  /** Number of unique clicks (deduplicated by visitor). */
-  unique_clicks: number;
-  /** Click count grouped by ISO 3166-1 country code. */
-  clicks_by_country: Record<string, number>;
-  /** Click count grouped by device type (e.g. `'desktop'`, `'mobile'`). */
-  clicks_by_device: Record<string, number>;
-  /** Click count grouped by referrer domain. */
-  clicks_by_referrer: Record<string, number>;
+  /** Number of unique visitors who clicked this link. */
+  unique_visitors: number;
+  /** Number of clicks identified as bot traffic. */
+  bot_clicks: number;
+  /** Total clicks minus bot clicks. */
+  human_clicks: number;
+  /** ISO 8601 timestamp when the link was created. */
+  created_at: string;
+  /** ISO 8601 timestamp of the most recent click, or `null` if never clicked. */
+  last_accessed_at: string | null;
+  /** Whether the link is currently active. */
+  is_active: boolean;
+  /** Number of days since the link was created. */
+  days_active: number;
+  /** Average clicks per day since creation. */
+  average_clicks_per_day: number;
+  /** Ratio of unique visitors to total clicks (0-1). */
+  conversion_rate: number;
 }
 
 // ── Analytics ──
@@ -603,8 +617,8 @@ export interface ListWebhookDeliveriesParams {
 
 /** A single visitor journey event to be ingested or returned from queries. */
 export interface JourneyEvent {
-  /** Short code of the QCK link (e.g. "abc123"). Read from `?qck_id=` URL param after redirect. */
-  short_code: string;
+  /** Link UUID. Read from `?qck_link=` URL param after redirect. */
+  link_id: string;
   /** Unique visitor identifier (user-managed — your user ID, device UUID, etc.). */
   visitor_id: string;
   /** Session identifier (optional — enables session analytics and funnel analysis when provided). */
@@ -770,7 +784,7 @@ export type ConversionPeriod = '7d' | '30d' | '90d';
 export type ConversionInterval = 'hour' | 'day' | 'week' | 'month';
 
 /** Dimension for breaking down conversion data. */
-export type ConversionDimension = 'source' | 'device' | 'country' | 'link' | 'name';
+export type ConversionDimension = 'device' | 'country' | 'link' | 'name';
 
 /** Common scope parameters for conversion queries. */
 export interface ConversionScopeParams {
@@ -779,7 +793,7 @@ export interface ConversionScopeParams {
   /** Filter conversions to a specific custom domain. */
   domain_id?: string;
   /** Filter conversions to a specific link by short code. */
-  short_code?: string;
+  link_id?: string;
 }
 
 /** Parameters for retrieving conversion timeseries data. */
@@ -796,8 +810,8 @@ export interface ConversionBreakdownParams extends ConversionScopeParams {
 
 /** Parameters for tracking a conversion event via the SDK. */
 export interface TrackConversionParams {
-  /** Short code of the QCK link (e.g. "abc123"). */
-  short_code: string;
+  /** Link UUID. */
+  link_id: string;
   /** Unique visitor identifier (your user ID, device UUID, etc.). */
   visitor_id: string;
   /** Session identifier (optional). */

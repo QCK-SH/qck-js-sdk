@@ -27,7 +27,7 @@ import type {
  * await qck.journey.ingest({
  *   events: [
  *     {
- *       short_code: 'abc123',
+ *       link_id: 'your-link-uuid',
  *       visitor_id: 'vis_123',
  *       session_id: 'ses_456',
  *       event_type: 'page_view',
@@ -58,7 +58,7 @@ export class JourneyResource {
    * await qck.journey.ingest({
    *   events: [
    *     {
-   *       short_code: 'abc123',
+   *       link_id: 'your-link-uuid',
    *       visitor_id: 'vis_123',
    *       session_id: 'ses_456',
    *       event_type: 'page_view',
@@ -66,7 +66,7 @@ export class JourneyResource {
    *       page_title: 'Page One',
    *     },
    *     {
-   *       short_code: 'abc123',
+   *       link_id: 'your-link-uuid',
    *       visitor_id: 'vis_123',
    *       session_id: 'ses_456',
    *       event_type: 'scroll_depth',
@@ -87,7 +87,7 @@ export class JourneyResource {
   /**
    * Get journey summary for a specific link.
    *
-   * @param shortCode - The unique identifier (UUID) of the link.
+   * @param linkId - The unique identifier (UUID) of the link.
    * @param params - Optional period filter.
    * @returns Aggregated journey metrics including visitors, sessions, top pages, and top events.
    * @throws {NotFoundError} If the link does not exist.
@@ -99,8 +99,8 @@ export class JourneyResource {
    * console.log(`Avg session: ${summary.avg_session_duration_seconds}s`);
    * ```
    */
-  async getSummary(shortCode: string, params?: JourneyQueryParams): Promise<JourneyLinkSummary> {
-    return this.client.get<JourneyLinkSummary>(`/journey/links/${shortCode}/summary`, {
+  async getSummary(linkId: string, params?: JourneyQueryParams): Promise<JourneyLinkSummary> {
+    return this.client.get<JourneyLinkSummary>(`/journey/links/${linkId}/summary`, {
       params: params as Record<string, string | number | undefined>,
     });
   }
@@ -109,7 +109,7 @@ export class JourneyResource {
    * Get funnel analysis for a specific link.
    * Steps are matched against event_type or event_name.
    *
-   * @param shortCode - The unique identifier (UUID) of the link.
+   * @param linkId - The unique identifier (UUID) of the link.
    * @param params - Funnel configuration with ordered step names and optional period.
    * @returns Funnel analysis showing visitor drop-off at each step.
    * @throws {NotFoundError} If the link does not exist.
@@ -125,8 +125,8 @@ export class JourneyResource {
    * }
    * ```
    */
-  async getFunnel(shortCode: string, params: FunnelParams): Promise<FunnelResult> {
-    return this.client.get<FunnelResult>(`/journey/links/${shortCode}/funnel`, {
+  async getFunnel(linkId: string, params: FunnelParams): Promise<FunnelResult> {
+    return this.client.get<FunnelResult>(`/journey/links/${linkId}/funnel`, {
       params: {
         steps: params.steps.join(','),
         period: params.period,
@@ -137,7 +137,7 @@ export class JourneyResource {
   /**
    * List sessions for a specific link.
    *
-   * @param shortCode - The unique identifier (UUID) of the link.
+   * @param linkId - The unique identifier (UUID) of the link.
    * @param params - Optional pagination, visitor filter, and period parameters.
    * @returns A paginated response containing session summaries.
    * @throws {NotFoundError} If the link does not exist.
@@ -155,11 +155,11 @@ export class JourneyResource {
    * ```
    */
   async listSessions(
-    shortCode: string,
+    linkId: string,
     params?: ListJourneySessionsParams,
   ): Promise<PaginatedResponse<SessionSummary>> {
     return this.client.get<PaginatedResponse<SessionSummary>>(
-      `/journey/links/${shortCode}/sessions`,
+      `/journey/links/${linkId}/sessions`,
       {
         params: params as Record<string, string | number | undefined>,
       },
@@ -169,7 +169,7 @@ export class JourneyResource {
   /**
    * List raw events for a specific link.
    *
-   * @param shortCode - The unique identifier (UUID) of the link.
+   * @param linkId - The unique identifier (UUID) of the link.
    * @param params - Optional pagination, event type filter, and period parameters.
    * @returns A paginated response containing raw journey events.
    * @throws {NotFoundError} If the link does not exist.
@@ -187,11 +187,11 @@ export class JourneyResource {
    * ```
    */
   async listEvents(
-    shortCode: string,
+    linkId: string,
     params?: ListJourneyEventsParams,
   ): Promise<PaginatedResponse<JourneyEvent>> {
     return this.client.get<PaginatedResponse<JourneyEvent>>(
-      `/journey/links/${shortCode}/events`,
+      `/journey/links/${linkId}/events`,
       {
         params: params as Record<string, string | number | undefined>,
       },

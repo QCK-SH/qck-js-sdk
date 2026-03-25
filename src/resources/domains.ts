@@ -12,7 +12,7 @@ import type { Domain } from '../types.js';
  * ```ts
  * const qck = new QCK({ apiKey: 'qck_...' });
  *
- * const domains = await qck.domains.list('org-uuid');
+ * const domains = await qck.domains.list();
  * for (const domain of domains) {
  *   console.log(`${domain.domain} - verified: ${domain.is_verified}`);
  * }
@@ -25,22 +25,20 @@ export class DomainsResource {
   constructor(private readonly client: HttpClient) {}
 
   /**
-   * List all custom domains for the specified organization.
+   * List all custom domains for the organization associated with the API key.
    *
-   * @param organizationId - The unique identifier (UUID) of the organization.
    * @returns An array of custom domain objects.
    * @throws {AuthenticationError} If the API key is invalid.
    *
    * @example
    * ```ts
-   * const domains = await qck.domains.list('org-uuid');
+   * const domains = await qck.domains.list();
    * const verified = domains.filter(d => d.is_verified);
    * console.log(`${verified.length} verified domains`);
    * ```
    */
-  async list(organizationId: string): Promise<Domain[]> {
-    return this.client.get<Domain[]>('/domains', {
-      params: { organizationId },
-    });
+  async list(): Promise<Domain[]> {
+    const response = await this.client.get<{ domains: Domain[]; total: number }>('/domains');
+    return response.domains;
   }
 }

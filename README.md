@@ -208,7 +208,7 @@ Track and analyze conversion events tied to your links.
 ```typescript
 // Track a conversion
 await qck.conversions.track({
-  short_code: 'abc123',            // required — link short code
+  link_id: 'your-link-uuid',            // required — link short code
   visitor_id: 'user-456',          // required — your user ID
   name: 'purchase',                // required — conversion name
   session_id: 'sess-789',          // optional — enables session analytics
@@ -221,7 +221,7 @@ await qck.conversions.track({
 // Conversion summary (org-wide or scoped)
 const summary = await qck.conversions.summary({
   period: '30d',                   // '7d' | '30d' | '90d'
-  short_code: 'abc123',            // optional — scope to a link
+  link_id: 'your-link-uuid',            // optional — scope to a link
 });
 
 // Conversion timeseries
@@ -232,7 +232,7 @@ const points = await qck.conversions.timeseries({
 
 // Breakdown by dimension
 const bySource = await qck.conversions.breakdown({
-  dimension: 'name',               // 'source' | 'device' | 'country' | 'link' | 'name'
+  dimension: 'name',               // 'device' | 'country' | 'link' | 'name'
   period: '30d',
 });
 
@@ -253,7 +253,7 @@ const ttc = await qck.conversions.timeToConvert({ period: '30d' });
 
 ### Journey Tracking
 
-Track visitor journeys from any platform — websites, mobile apps, server-side. After a user clicks your QCK short link, they're redirected to your destination with `?qck_id=<short_code>` in the URL. Read this param to attribute journey events.
+Track visitor journeys from any platform — websites, mobile apps, server-side. After a user clicks your QCK short link, they're redirected to your destination with `?qck_link=<uuid>` in the URL. Read this param to attribute journey events.
 
 **Event types** (Enum — must be one of these):
 
@@ -267,14 +267,14 @@ Track visitor journeys from any platform — websites, mobile apps, server-side.
 
 ```typescript
 // Read the short code from the redirect URL
-const shortCode = new URLSearchParams(window.location.search).get('qck_id');
+const linkId = new URLSearchParams(window.location.search).get('qck_link');
 
 // Ingest journey events (batch up to 100 per request)
 await qck.journey.ingest({
   events: [
     // Page view
     {
-      short_code: 'abc123',
+      link_id: 'your-link-uuid',
       visitor_id: 'user-456',
       session_id: 'sess-789',       // optional
       event_type: 'page_view',
@@ -283,7 +283,7 @@ await qck.journey.ingest({
     },
     // Scroll depth
     {
-      short_code: 'abc123',
+      link_id: 'your-link-uuid',
       visitor_id: 'user-456',
       session_id: 'sess-789',
       event_type: 'scroll_depth',
@@ -292,7 +292,7 @@ await qck.journey.ingest({
     },
     // Time on page (seconds)
     {
-      short_code: 'abc123',
+      link_id: 'your-link-uuid',
       visitor_id: 'user-456',
       session_id: 'sess-789',
       event_type: 'time_on_page',
@@ -301,7 +301,7 @@ await qck.journey.ingest({
     },
     // Custom event with properties
     {
-      short_code: 'abc123',
+      link_id: 'your-link-uuid',
       visitor_id: 'user-456',
       event_type: 'custom',
       event_name: 'cta_click',
@@ -310,7 +310,7 @@ await qck.journey.ingest({
     },
     // Conversion with revenue
     {
-      short_code: 'abc123',
+      link_id: 'your-link-uuid',
       visitor_id: 'user-456',
       event_type: 'conversion',
       conversion_name: 'purchase',
@@ -325,7 +325,7 @@ await qck.journey.ingest({
 // Context fields (all optional — your data, you provide it)
 await qck.journey.ingest({
   events: [{
-    short_code: 'abc123',
+    link_id: 'your-link-uuid',
     visitor_id: 'user-456',
     event_type: 'page_view',
     page_url: '/home',
@@ -341,22 +341,22 @@ await qck.journey.ingest({
 });
 
 // Journey summary for a link
-const summary = await qck.journey.getSummary('abc123', { period: '30d' });
+const summary = await qck.journey.getSummary('link-uuid', { period: '30d' });
 
 // Funnel analysis
-const funnel = await qck.journey.getFunnel('abc123', {
+const funnel = await qck.journey.getFunnel('link-uuid', {
   steps: ['page_view', 'cta_click', 'purchase'],
   period: '30d',
 });
 
 // List sessions (paginated)
-const sessions = await qck.journey.listSessions('abc123', {
+const sessions = await qck.journey.listSessions('link-uuid', {
   period: '7d',
   limit: 10,
 });
 
 // List events (paginated)
-const events = await qck.journey.listEvents('abc123', {
+const events = await qck.journey.listEvents('link-uuid', {
   event_type: 'custom',
   period: '7d',
 });
@@ -370,7 +370,7 @@ curl -X POST https://qck.sh/public-api/v1/journey/events \
   -H "Content-Type: application/json" \
   -d '{
     "events": [{
-      "short_code": "abc123",
+      "link_id": "your-link-uuid",
       "visitor_id": "user-456",
       "event_type": "page_view",
       "page_url": "/pricing"
@@ -383,10 +383,10 @@ curl -X POST https://qck.sh/public-api/v1/journey/events \
 | Method | Parameters | Returns | Description |
 |--------|-----------|---------|-------------|
 | `ingest(params)` | `IngestEventsParams` | `Promise<void>` | Batch ingest journey events (1-100) |
-| `getSummary(shortCode, params?)` | `string, JourneyQueryParams` | `Promise<JourneyLinkSummary>` | Link journey summary |
-| `getFunnel(shortCode, params)` | `string, FunnelParams` | `Promise<FunnelResult>` | Funnel analysis |
-| `listSessions(shortCode, params?)` | `string, ListJourneySessionsParams` | `Promise<PaginatedResponse<SessionSummary>>` | List visitor sessions |
-| `listEvents(shortCode, params?)` | `string, ListJourneyEventsParams` | `Promise<PaginatedResponse<JourneyEvent>>` | List journey events |
+| `getSummary(linkId, params?)` | `string, JourneyQueryParams` | `Promise<JourneyLinkSummary>` | Link journey summary |
+| `getFunnel(linkId, params)` | `string, FunnelParams` | `Promise<FunnelResult>` | Funnel analysis |
+| `listSessions(linkId, params?)` | `string, ListJourneySessionsParams` | `Promise<PaginatedResponse<SessionSummary>>` | List visitor sessions |
+| `listEvents(linkId, params?)` | `string, ListJourneyEventsParams` | `Promise<PaginatedResponse<JourneyEvent>>` | List journey events |
 
 ### Webhooks
 
@@ -480,7 +480,7 @@ WebhookEventCategories.billing  // all billing events
 List custom domains configured for your organization.
 
 ```typescript
-const domains = await qck.domains.list('org_id');
+const domains = await qck.domains.list();
 for (const domain of domains) {
   console.log(`${domain.domain} (verified: ${domain.is_verified}, default: ${domain.is_default})`);
 }
@@ -490,7 +490,7 @@ for (const domain of domains) {
 
 | Method | Parameters | Returns | Description |
 |--------|-----------|---------|-------------|
-| `list(organizationId)` | `string` | `Promise<Domain[]>` | List organization domains |
+| `list()` | — | `Promise<Domain[]>` | List organization domains |
 
 ## Error Handling
 
