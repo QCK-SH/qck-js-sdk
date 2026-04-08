@@ -148,8 +148,6 @@ export interface CreateLinkParams {
 
 /** Parameters for updating an existing short link. All fields are optional. */
 export interface UpdateLinkParams {
-  /** New destination URL. */
-  url?: string;
   /** New custom alias for the short code. */
   custom_alias?: string;
   /** New title for OG tags. */
