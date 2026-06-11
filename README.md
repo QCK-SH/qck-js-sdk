@@ -27,7 +27,7 @@ const link = await qck.links.create({ url: 'https://example.com' });
 console.log(link.short_url); // https://qck.sh/abc123
 
 // Get analytics
-const summary = await qck.analytics.summary({ days: 30 });
+const { analytics: summary } = await qck.analytics.summary({ days: 30 });
 console.log(`${summary.total_clicks} clicks, ${summary.unique_visitors} visitors`);
 ```
 
@@ -36,7 +36,7 @@ console.log(`${summary.total_clicks} clicks, ${summary.unique_visitors} visitors
 ```typescript
 const qck = new QCK({
   apiKey: 'qck_your_api_key',                     // Required - your API key
-  baseUrl: 'https://api.qck.sh/public-api/v1',    // Optional - API base URL
+  baseUrl: 'https://qck.sh/public-api/v1',        // Optional - API base URL
   timeout: 30_000,                                  // Optional - request timeout in ms (default: 30000)
   retries: 3,                                       // Optional - automatic retries (default: 3)
 });
@@ -45,7 +45,7 @@ const qck = new QCK({
 | Option    | Type     | Default                                    | Description                     |
 |-----------|----------|--------------------------------------------|---------------------------------|
 | `apiKey`  | `string` | —                                          | **Required.** Your QCK API key  |
-| `baseUrl` | `string` | `'https://api.qck.sh/public-api/v1'`       | API base URL                    |
+| `baseUrl` | `string` | `'https://qck.sh/public-api/v1'`           | API base URL                    |
 | `timeout` | `number` | `30000`                                    | Request timeout in milliseconds |
 | `retries` | `number` | `3`                                        | Max automatic retries           |
 
@@ -90,35 +90,40 @@ const result = await qck.links.list({
   sort_by: 'created_at',           // optional
   sort_order: 'desc',              // optional, 'asc' | 'desc'
 });
-// result.data: Link[], result.total, result.page, result.limit
+// result.data: Link[], result.page, result.per_page, result.total, result.total_pages
 
 // Get a single link
 const link = await qck.links.get('link_id');
 
-// Update a link
+// Update a link (the destination URL is immutable)
 const updated = await qck.links.update('link_id', {
   title: 'New Title',
   is_active: false,
   tags: ['updated'],
-  url: 'https://new-destination.com',
 });
 
 // Delete a link
 await qck.links.delete('link_id');
 
-// Bulk create
-const links = await qck.links.bulkCreate({
+// Bulk create — supports partial success (HTTP 201 / 207 / 422)
+const result = await qck.links.bulkCreate({
   links: [
     { url: 'https://example.com/a' },
     { url: 'https://example.com/b', custom_alias: 'b-link' },
     { url: 'https://example.com/c', tags: ['batch'] },
   ],
 });
+// result.created: { index, link }[]   — successfully created links
+// result.failed:  { index, url, error, error_type }[] — per-item failures
+// result.total_requested, result.success_count, result.failure_count
+for (const failure of result.failed) {
+  console.warn(`Link #${failure.index} failed: ${failure.error}`);
+}
 
 // Get link stats
 const stats = await qck.links.getStats('link_id');
-// stats.total_clicks, stats.unique_clicks
-// stats.clicks_by_country, stats.clicks_by_device, stats.clicks_by_referrer
+// stats.total_clicks, stats.unique_visitors, stats.bot_clicks, stats.human_clicks
+// stats.days_active, stats.average_clicks_per_day, stats.conversion_rate
 
 // Upload OG image
 const imageBlob = new Blob([imageBuffer], { type: 'image/png' });
@@ -137,7 +142,7 @@ await qck.links.deleteOgImage('link_id');
 | `get(id)` | `string` | `Promise<Link>` | Get a link by ID |
 | `update(id, params)` | `string, UpdateLinkParams` | `Promise<Link>` | Update a link |
 | `delete(id)` | `string` | `Promise<void>` | Delete a link |
-| `bulkCreate(params)` | `BulkCreateParams` | `Promise<Link[]>` | Create multiple links |
+| `bulkCreate(params)` | `BulkCreateParams` | `Promise<BulkCreateResult>` | Create multiple links (partial success supported) |
 | `getStats(id)` | `string` | `Promise<LinkStats>` | Get click statistics |
 | `uploadOgImage(id, file)` | `string, Blob\|ArrayBuffer\|Uint8Array` | `Promise<{ og_image: string }>` | Upload OG image |
 | `deleteOgImage(id)` | `string` | `Promise<void>` | Remove OG image |
@@ -146,9 +151,14 @@ await qck.links.deleteOgImage('link_id');
 
 Query aggregate analytics across all links or filtered by domain.
 
+Every analytics method returns `{ analytics, usage }` — the analytics payload
+plus tier usage metadata. If your organization exceeds its monthly tracked-click
+limit, query date ranges are clamped server-side to the most recent data within
+budget (`usage.limit_exceeded`, `usage.cutoff_date`).
+
 ```typescript
 // Summary stats
-const summary = await qck.analytics.summary({
+const { analytics: summary, usage } = await qck.analytics.summary({
   days: 30,                         // last N days (shorthand)
   // OR use date range:
   // start_date: '2026-01-01',
@@ -158,33 +168,36 @@ const summary = await qck.analytics.summary({
 });
 // summary.total_clicks, summary.unique_visitors, summary.total_links
 // summary.today_clicks, summary.yesterday_clicks, summary.active_links
+// summary.links_this_month, summary.clicks_this_month
+// usage.clicks_this_month, usage.click_limit, usage.limit_exceeded,
+// usage.tier, usage.retention_days, usage.cutoff_date
 
 // Timeseries data
-const points = await qck.analytics.timeseries({ days: 7 });
+const { analytics: points } = await qck.analytics.timeseries({ days: 7 });
 for (const point of points) {
-  console.log(`${point.timestamp}: ${point.clicks} clicks, ${point.unique_visitors} unique`);
+  console.log(`${point.date}: ${point.clicks} clicks, ${point.unique_visitors} unique`);
 }
 
 // Geographic breakdown
-const geo = await qck.analytics.geo({ days: 30 });
+const { analytics: geo } = await qck.analytics.geo({ days: 30 });
 for (const entry of geo) {
-  console.log(`${entry.country} (${entry.country_code}): ${entry.clicks} clicks`);
+  console.log(`${entry.country_code}: ${entry.clicks} clicks`);
 }
 
 // Device breakdown
-const devices = await qck.analytics.devices({ days: 30 });
+const { analytics: devices } = await qck.analytics.devices({ days: 30 });
 for (const entry of devices) {
   console.log(`${entry.device_type} / ${entry.browser} / ${entry.os}: ${entry.clicks}`);
 }
 
 // Referrer breakdown
-const referrers = await qck.analytics.referrers({ days: 30 });
+const { analytics: referrers } = await qck.analytics.referrers({ days: 30 });
 for (const entry of referrers) {
   console.log(`${entry.referrer}: ${entry.clicks} clicks`);
 }
 
 // Hourly distribution
-const hourly = await qck.analytics.hourly({ days: 7 });
+const { analytics: hourly } = await qck.analytics.hourly({ days: 7 });
 for (const entry of hourly) {
   console.log(`${entry.hour}:00 — ${entry.clicks} clicks`);
 }
@@ -194,12 +207,12 @@ for (const entry of hourly) {
 
 | Method | Parameters | Returns | Description |
 |--------|-----------|---------|-------------|
-| `summary(params?)` | `AnalyticsSummaryParams` | `Promise<AnalyticsSummary>` | Aggregate summary stats |
-| `timeseries(params?)` | `TimeseriesParams` | `Promise<TimeseriesPoint[]>` | Clicks over time |
-| `geo(params?)` | `GeoAnalyticsParams` | `Promise<GeoAnalyticsEntry[]>` | Geographic breakdown |
-| `devices(params?)` | `DeviceAnalyticsParams` | `Promise<DeviceAnalyticsEntry[]>` | Device/browser/OS breakdown |
-| `referrers(params?)` | `ReferrerAnalyticsParams` | `Promise<ReferrerAnalyticsEntry[]>` | Traffic source breakdown |
-| `hourly(params?)` | `HourlyAnalyticsParams` | `Promise<HourlyAnalyticsEntry[]>` | Hourly click distribution |
+| `summary(params?)` | `AnalyticsSummaryParams` | `Promise<AnalyticsResult<AnalyticsSummary>>` | Aggregate summary stats |
+| `timeseries(params?)` | `TimeseriesParams` | `Promise<AnalyticsResult<TimeseriesPoint[]>>` | Clicks over time |
+| `geo(params?)` | `GeoAnalyticsParams` | `Promise<AnalyticsResult<GeoAnalyticsEntry[]>>` | Geographic breakdown |
+| `devices(params?)` | `DeviceAnalyticsParams` | `Promise<AnalyticsResult<DeviceAnalyticsEntry[]>>` | Device/browser/OS breakdown |
+| `referrers(params?)` | `ReferrerAnalyticsParams` | `Promise<AnalyticsResult<ReferrerAnalyticsEntry[]>>` | Traffic source breakdown |
+| `hourly(params?)` | `HourlyAnalyticsParams` | `Promise<AnalyticsResult<HourlyAnalyticsEntry[]>>` | Hourly click distribution |
 
 ### Conversions
 
@@ -350,13 +363,13 @@ const funnel = await qck.journey.getFunnel('link-uuid', {
 });
 
 // List sessions (paginated)
-const sessions = await qck.journey.listSessions('link-uuid', {
+const { sessions, total } = await qck.journey.listSessions('link-uuid', {
   period: '7d',
   limit: 10,
 });
 
 // List events (paginated)
-const events = await qck.journey.listEvents('link-uuid', {
+const { events } = await qck.journey.listEvents('link-uuid', {
   event_type: 'custom',
   period: '7d',
 });
@@ -385,8 +398,8 @@ curl -X POST https://qck.sh/public-api/v1/journey/events \
 | `ingest(params)` | `IngestEventsParams` | `Promise<void>` | Batch ingest journey events (1-100) |
 | `getSummary(linkId, params?)` | `string, JourneyQueryParams` | `Promise<JourneyLinkSummary>` | Link journey summary |
 | `getFunnel(linkId, params)` | `string, FunnelParams` | `Promise<FunnelResult>` | Funnel analysis |
-| `listSessions(linkId, params?)` | `string, ListJourneySessionsParams` | `Promise<PaginatedResponse<SessionSummary>>` | List visitor sessions |
-| `listEvents(linkId, params?)` | `string, ListJourneyEventsParams` | `Promise<PaginatedResponse<JourneyEvent>>` | List journey events |
+| `listSessions(linkId, params?)` | `string, ListJourneySessionsParams` | `Promise<PaginatedSessions>` | List visitor sessions (`{ sessions, total, page, limit }`) |
+| `listEvents(linkId, params?)` | `string, ListJourneyEventsParams` | `Promise<PaginatedEvents>` | List journey events (`{ events, total, page, limit }`) |
 
 ### Webhooks
 
@@ -424,12 +437,11 @@ const updated = await qck.webhooks.update('webhook_id', {
 // Delete a webhook
 await qck.webhooks.delete('webhook_id');
 
-// View delivery history (paginated)
-const deliveries = await qck.webhooks.listDeliveries('webhook_id', {
-  page: 1,
-  limit: 20,
-});
-// deliveries.data: WebhookDelivery[]
+// View delivery history (50 most recent, newest first)
+const deliveries = await qck.webhooks.listDeliveries('webhook_id');
+for (const d of deliveries) {
+  console.log(`${d.event_type}: ${d.status} (HTTP ${d.http_status})`);
+}
 
 // Send a test event
 await qck.webhooks.test('webhook_id');
@@ -472,7 +484,7 @@ WebhookEventCategories.billing  // all billing events
 | `get(id)` | `string` | `Promise<WebhookEndpoint>` | Get a webhook by ID |
 | `update(id, params)` | `string, UpdateWebhookParams` | `Promise<WebhookEndpoint>` | Update a webhook |
 | `delete(id)` | `string` | `Promise<void>` | Delete a webhook |
-| `listDeliveries(id, params?)` | `string, ListWebhookDeliveriesParams` | `Promise<PaginatedResponse<WebhookDelivery>>` | Delivery history |
+| `listDeliveries(id)` | `string` | `Promise<WebhookDelivery[]>` | 50 most recent deliveries |
 | `test(id)` | `string` | `Promise<void>` | Send a test event |
 
 ### Domains
@@ -482,7 +494,8 @@ List custom domains configured for your organization.
 ```typescript
 const domains = await qck.domains.list();
 for (const domain of domains) {
-  console.log(`${domain.domain} (verified: ${domain.is_verified}, default: ${domain.is_default})`);
+  // status: 'pending' | 'provisioning' | 'provisioning_failed' | 'active' | 'rejected' | 'suspended'
+  console.log(`${domain.domain} (status: ${domain.status}, ssl: ${domain.sslStatus})`);
 }
 ```
 
@@ -537,33 +550,41 @@ try {
 
 The SDK automatically retries requests on:
 
-- **Rate limits (429)** — respects `Retry-After` header, falls back to 60s
-- **Network errors** — connection failures, DNS resolution errors
-- **Timeouts** — request timeout exceeded
+- **Rate limits (429)** — all methods (the server confirmed the request was
+  not processed). Respects the `Retry-After` header, falls back to 60s,
+  capped at 2 minutes.
+- **Network errors and timeouts** — only for GET requests and requests that
+  carry an `X-Idempotency-Key` header (journey ingest). Non-idempotent
+  POST/PATCH/DELETE requests are **not** retried on network errors, since
+  the server may have already processed them.
 
-Retries use exponential backoff: `1s → 2s → 4s` (capped at 10s). Rate limit retries respect the server's `Retry-After` header (capped at 2 minutes).
+Network error retries use exponential backoff: `1s → 2s → 4s` (capped at 10s).
 
 ## Pagination
 
-Methods that return lists use cursor-based pagination:
+Listing endpoints use page-based pagination (`page` + `per_page`). The API
+returns the items in `data` and the pagination counters in the envelope's
+`meta` block; the SDK merges them into a single result:
 
 ```typescript
 const result = await qck.links.list({ page: 1, per_page: 25 });
 
-console.log(result.data);   // Link[]
-console.log(result.total);  // total number of items
-console.log(result.page);   // current page
-console.log(result.limit);  // items per page
+console.log(result.data);        // Link[]
+console.log(result.page);        // current page (1-indexed)
+console.log(result.per_page);    // items per page
+console.log(result.total);       // total number of items
+console.log(result.total_pages); // total number of pages
 
 // Iterate through all pages
+const allLinks: Link[] = [];
 let page = 1;
-let allLinks: Link[] = [];
-while (true) {
+let totalPages = 1;
+do {
   const result = await qck.links.list({ page, per_page: 100 });
   allLinks.push(...result.data);
-  if (allLinks.length >= result.total) break;
+  totalPages = result.total_pages;
   page++;
-}
+} while (page <= totalPages);
 ```
 
 ## TypeScript Support
@@ -576,7 +597,10 @@ import type {
   CreateLinkParams,
   UpdateLinkParams,
   ListLinksParams,
+  BulkCreateResult,
   LinkStats,
+  AnalyticsResult,
+  AnalyticsUsage,
   AnalyticsSummary,
   TimeseriesPoint,
   GeoAnalyticsEntry,
@@ -588,10 +612,15 @@ import type {
   JourneyEvent,
   FunnelResult,
   SessionSummary,
+  PaginatedSessions,
+  PaginatedEvents,
   WebhookEndpoint,
+  WebhookDelivery,
   WebhookPayload,
   Domain,
+  DomainStatus,
   PaginatedResponse,
+  ResponseMeta,
   QCKConfig,
 } from '@qcksh/sdk';
 ```

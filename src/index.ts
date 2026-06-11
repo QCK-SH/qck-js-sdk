@@ -18,7 +18,7 @@ import type { QCKConfig } from './types.js';
  *
  * @example
  * ```ts
- * import { QCK } from '@qck/sdk';
+ * import { QCK } from '@qcksh/sdk';
  *
  * const qck = new QCK({ apiKey: 'qck_...' });
  *
@@ -102,26 +102,36 @@ export {
 } from './types.js';
 export type {
   QCKConfig,
+  ApiResponse,
+  ResponseMeta,
   Link,
   LinkMetadata,
   CreateLinkParams,
   UpdateLinkParams,
   ListLinksParams,
   BulkCreateParams,
+  BulkCreateResult,
+  BulkLinkSuccess,
+  BulkLinkError,
   LinkStats,
+  AnalyticsResult,
+  AnalyticsUsage,
   AnalyticsSummary,
   AnalyticsSummaryParams,
   TimeseriesParams,
   TimeseriesPoint,
   Domain,
+  DomainStatus,
   WebhookEndpoint,
   CreateWebhookParams,
   UpdateWebhookParams,
   WebhookDelivery,
-  ListWebhookDeliveriesParams,
+  WebhookDeliveryStatus,
   WebhookEventType,
   WebhookPayload,
   PaginatedResponse,
+  PaginatedSessions,
+  PaginatedEvents,
   JourneyEvent,
   IngestEventsParams,
   JourneyLinkSummary,

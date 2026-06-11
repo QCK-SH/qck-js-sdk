@@ -1,15 +1,14 @@
 import type { HttpClient } from '../client.js';
 import type {
-  JourneyEvent,
   IngestEventsParams,
   JourneyLinkSummary,
   FunnelResult,
   FunnelParams,
   JourneyQueryParams,
-  SessionSummary,
   ListJourneySessionsParams,
   ListJourneyEventsParams,
-  PaginatedResponse,
+  PaginatedSessions,
+  PaginatedEvents,
 } from '../types.js';
 
 /**
@@ -144,12 +143,12 @@ export class JourneyResource {
    *
    * @example
    * ```ts
-   * const sessions = await qck.journey.listSessions('abc123', {
+   * const result = await qck.journey.listSessions('abc123', {
    *   page: 1,
    *   limit: 20,
    *   period: '7d',
    * });
-   * for (const session of sessions.data) {
+   * for (const session of result.sessions) {
    *   console.log(`Session ${session.session_id}: ${session.event_count} events`);
    * }
    * ```
@@ -157,8 +156,8 @@ export class JourneyResource {
   async listSessions(
     linkId: string,
     params?: ListJourneySessionsParams,
-  ): Promise<PaginatedResponse<SessionSummary>> {
-    return this.client.get<PaginatedResponse<SessionSummary>>(
+  ): Promise<PaginatedSessions> {
+    return this.client.get<PaginatedSessions>(
       `/journey/links/${linkId}/sessions`,
       {
         params: params as Record<string, string | number | undefined>,
@@ -176,12 +175,12 @@ export class JourneyResource {
    *
    * @example
    * ```ts
-   * const events = await qck.journey.listEvents('abc123', {
+   * const result = await qck.journey.listEvents('abc123', {
    *   event_type: 'page_view',
    *   period: '7d',
    *   limit: 100,
    * });
-   * for (const event of events.data) {
+   * for (const event of result.events) {
    *   console.log(`${event.event_type}: ${event.page_url} at ${event.timestamp}`);
    * }
    * ```
@@ -189,8 +188,8 @@ export class JourneyResource {
   async listEvents(
     linkId: string,
     params?: ListJourneyEventsParams,
-  ): Promise<PaginatedResponse<JourneyEvent>> {
-    return this.client.get<PaginatedResponse<JourneyEvent>>(
+  ): Promise<PaginatedEvents> {
+    return this.client.get<PaginatedEvents>(
       `/journey/links/${linkId}/events`,
       {
         params: params as Record<string, string | number | undefined>,

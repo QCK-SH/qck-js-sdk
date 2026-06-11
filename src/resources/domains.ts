@@ -14,7 +14,7 @@ import type { Domain } from '../types.js';
  *
  * const domains = await qck.domains.list();
  * for (const domain of domains) {
- *   console.log(`${domain.domain} - verified: ${domain.is_verified}`);
+ *   console.log(`${domain.domain} - status: ${domain.status}`);
  * }
  * ```
  */
@@ -33,8 +33,8 @@ export class DomainsResource {
    * @example
    * ```ts
    * const domains = await qck.domains.list();
-   * const verified = domains.filter(d => d.is_verified);
-   * console.log(`${verified.length} verified domains`);
+   * const active = domains.filter(d => d.status === 'active');
+   * console.log(`${active.length} active domains`);
    * ```
    */
   async list(): Promise<Domain[]> {

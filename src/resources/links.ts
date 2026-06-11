@@ -5,6 +5,7 @@ import type {
   UpdateLinkParams,
   ListLinksParams,
   BulkCreateParams,
+  BulkCreateResult,
   LinkStats,
   PaginatedResponse,
 } from '../types.js';
@@ -28,7 +29,7 @@ import type {
  * });
  *
  * // List links with filtering
- * const { data, total } = await qck.links.list({
+ * const { data, total, total_pages } = await qck.links.list({
  *   search: 'example',
  *   sort_by: 'total_clicks',
  *   sort_order: 'desc',
@@ -78,13 +79,24 @@ export class LinksResource {
    *   tags: ['marketing'],
    *   is_active: true,
    * });
-   * console.log(`${result.total} links found`);
+   * console.log(`${result.total} links found across ${result.total_pages} pages`);
    * ```
    */
   async list(params?: ListLinksParams): Promise<PaginatedResponse<Link>> {
-    return this.client.get<PaginatedResponse<Link>>('/links', {
+    // The API returns the links as a bare array in `data`, with pagination
+    // fields in the envelope's `meta` block.
+    const { data, meta } = await this.client.getWithMeta<Link[]>('/links', {
       params: params as Record<string, string | number | boolean | string[] | undefined>,
     });
+
+    const items = data ?? [];
+    return {
+      data: items,
+      page: meta?.page ?? params?.page ?? 1,
+      per_page: meta?.per_page ?? params?.per_page ?? items.length,
+      total: meta?.total ?? items.length,
+      total_pages: meta?.total_pages ?? 1,
+    };
   }
 
   /**
@@ -142,22 +154,38 @@ export class LinksResource {
   /**
    * Bulk create multiple links at once.
    *
+   * @description Supports partial success: the API responds with HTTP 201
+   * when every link is created, 207 when some links fail, and 422 when all
+   * fail. In all three cases this method returns the {@link BulkCreateResult}
+   * describing per-item outcomes — inspect `created` and `failed` rather
+   * than relying on a thrown error.
+   *
    * @param params - Object containing an array of link creation payloads.
-   * @returns An array of the newly created link objects.
-   * @throws {ValidationError} If any link payload is invalid.
+   * @returns The bulk operation result with created links and per-item failures.
+   * @throws {ValidationError} If the request itself is invalid (e.g. empty
+   *   batch or batch size over your tier limit).
    *
    * @example
    * ```ts
-   * const links = await qck.links.bulkCreate({
+   * const result = await qck.links.bulkCreate({
    *   links: [
    *     { url: 'https://example.com/page-1' },
    *     { url: 'https://example.com/page-2', custom_alias: 'p2' },
    *   ],
    * });
+   * console.log(`${result.success_count}/${result.total_requested} created`);
+   * for (const failure of result.failed) {
+   *   console.warn(`#${failure.index} ${failure.url}: ${failure.error}`);
+   * }
    * ```
    */
-  async bulkCreate(params: BulkCreateParams): Promise<Link[]> {
-    return this.client.post<Link[]>('/links/bulk', params.links);
+  async bulkCreate(params: BulkCreateParams): Promise<BulkCreateResult> {
+    // 422 (all items failed) still carries the result payload — return it
+    // so callers can inspect per-item errors. 207 (partial) is handled by
+    // the HTTP layer's envelope logic.
+    return this.client.post<BulkCreateResult>('/links/bulk', params.links, {
+      acceptErrorStatuses: [422],
+    });
   }
 
   /**
@@ -171,7 +199,7 @@ export class LinksResource {
    * ```ts
    * const stats = await qck.links.getStats('550e8400-...');
    * console.log(`Total clicks: ${stats.total_clicks}`);
-   * console.log(`Unique clicks: ${stats.unique_clicks}`);
+   * console.log(`Unique visitors: ${stats.unique_visitors}`);
    * ```
    */
   async getStats(id: string): Promise<LinkStats> {

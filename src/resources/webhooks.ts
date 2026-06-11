@@ -4,8 +4,6 @@ import type {
   CreateWebhookParams,
   UpdateWebhookParams,
   WebhookDelivery,
-  ListWebhookDeliveriesParams,
-  PaginatedResponse,
 } from '../types.js';
 
 /**
@@ -17,7 +15,7 @@ import type {
  *
  * @example
  * ```ts
- * import { QCK, WebhookEvents } from '@qck/sdk';
+ * import { QCK, WebhookEvents } from '@qcksh/sdk';
  *
  * const qck = new QCK({ apiKey: 'qck_...' });
  *
@@ -128,34 +126,23 @@ export class WebhooksResource {
   }
 
   /**
-   * List delivery attempts for a webhook endpoint.
+   * List recent deliveries for a webhook endpoint.
+   * Returns the 50 most recent deliveries, newest first (not paginated).
    *
    * @param id - The unique identifier (UUID) of the webhook endpoint.
-   * @param params - Optional pagination parameters.
-   * @returns A paginated response containing delivery attempt records.
+   * @returns An array of the most recent delivery records.
    * @throws {NotFoundError} If the webhook does not exist.
    *
    * @example
    * ```ts
-   * const deliveries = await qck.webhooks.listDeliveries('wh-uuid', {
-   *   page: 1,
-   *   limit: 50,
-   * });
-   * for (const d of deliveries.data) {
+   * const deliveries = await qck.webhooks.listDeliveries('wh-uuid');
+   * for (const d of deliveries) {
    *   console.log(`${d.event_type}: ${d.status} (HTTP ${d.http_status})`);
    * }
    * ```
    */
-  async listDeliveries(
-    id: string,
-    params?: ListWebhookDeliveriesParams,
-  ): Promise<PaginatedResponse<WebhookDelivery>> {
-    return this.client.get<PaginatedResponse<WebhookDelivery>>(
-      `/webhooks/${id}/deliveries`,
-      {
-        params: params as Record<string, string | number | undefined>,
-      },
-    );
+  async listDeliveries(id: string): Promise<WebhookDelivery[]> {
+    return this.client.get<WebhookDelivery[]>(`/webhooks/${id}/deliveries`);
   }
 
   /**

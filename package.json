@@ -16,6 +16,12 @@
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QCK-SH/qck-js-sdk.git"
+  },
+  "homepage": "https://github.com/QCK-SH/qck-js-sdk",
   "publishConfig": {
     "access": "public"
   },
@@ -24,7 +30,8 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "lint": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "qck",

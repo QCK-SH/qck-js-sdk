@@ -5,16 +5,24 @@ import {
   NotFoundError,
   ValidationError,
 } from './errors.js';
-import type { ApiResponse, RequestOptions } from './types.js';
+import type { ApiResponse, RequestOptions, ResponseMeta } from './types.js';
 
 /** Default base URL for the QCK public API. */
-const DEFAULT_BASE_URL = 'https://api.qck.sh/public-api/v1';
+const DEFAULT_BASE_URL = 'https://qck.sh/public-api/v1';
 /** Default request timeout in milliseconds (30 seconds). */
 const DEFAULT_TIMEOUT = 30_000;
 /** Default number of automatic retries on transient failures. */
 const DEFAULT_RETRIES = 3;
 /** Maximum delay between retries in milliseconds (2 minutes). */
 const MAX_RETRY_DELAY_MS = 120_000;
+
+/** A successful response payload together with the envelope's metadata. */
+export interface ResponseWithMeta<T> {
+  /** The unwrapped `data` payload. */
+  data: T;
+  /** The envelope `meta` block (request id, timestamp, pagination). */
+  meta?: ResponseMeta;
+}
 
 /**
  * Low-level HTTP client that handles authentication, retries,
@@ -27,7 +35,7 @@ const MAX_RETRY_DELAY_MS = 120_000;
  *
  * @example
  * ```ts
- * import { HttpClient } from '@qck/sdk';
+ * import { HttpClient } from '@qcksh/sdk';
  *
  * const client = new HttpClient({ apiKey: 'qck_...' });
  * const data = await client.get<MyType>('/some-endpoint');
@@ -48,7 +56,7 @@ export class HttpClient {
    *
    * @param config - Client configuration options.
    * @param config.apiKey - API key for authentication. Required.
-   * @param config.baseUrl - Base URL for the API. Defaults to `'https://api.qck.sh/public-api/v1'`.
+   * @param config.baseUrl - Base URL for the API. Defaults to `'https://qck.sh/public-api/v1'`.
    * @param config.timeout - Request timeout in milliseconds. Defaults to `30000`.
    * @param config.retries - Number of automatic retries. Defaults to `3`.
    * @throws {AuthenticationError} If `apiKey` is empty or not provided.
@@ -80,6 +88,22 @@ export class HttpClient {
    * @throws {QCKError} On API errors, network failures, or timeouts.
    */
   async get<T>(path: string, options?: RequestOptions): Promise<T> {
+    const { data } = await this.request<T>('GET', path, undefined, options);
+    return data;
+  }
+
+  /**
+   * Send a GET request and return both the data payload and the envelope
+   * metadata (used by paginated list endpoints, where pagination lives
+   * in `meta`).
+   *
+   * @typeParam T - Expected response data type.
+   * @param path - API endpoint path.
+   * @param options - Optional query parameters.
+   * @returns The unwrapped response data together with the envelope metadata.
+   * @throws {QCKError} On API errors, network failures, or timeouts.
+   */
+  async getWithMeta<T>(path: string, options?: RequestOptions): Promise<ResponseWithMeta<T>> {
     return this.request<T>('GET', path, undefined, options);
   }
 
@@ -94,7 +118,8 @@ export class HttpClient {
    * @throws {QCKError} On API errors, network failures, or timeouts.
    */
   async post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>('POST', path, body, options);
+    const { data } = await this.request<T>('POST', path, body, options);
+    return data;
   }
 
   /**
@@ -108,7 +133,8 @@ export class HttpClient {
    * @throws {QCKError} On API errors, network failures, or timeouts.
    */
   async patch<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>('PATCH', path, body, options);
+    const { data } = await this.request<T>('PATCH', path, body, options);
+    return data;
   }
 
   /**
@@ -122,7 +148,8 @@ export class HttpClient {
    * @throws {QCKError} On API errors, network failures, or timeouts.
    */
   async put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>('PUT', path, body, options);
+    const { data } = await this.request<T>('PUT', path, body, options);
+    return data;
   }
 
   /**
@@ -143,7 +170,8 @@ export class HttpClient {
     contentType: string,
     options?: RequestOptions,
   ): Promise<T> {
-    return this.requestRaw<T>('PUT', path, body, contentType, options);
+    const { data } = await this.requestRaw<T>('PUT', path, body, contentType, options);
+    return data;
   }
 
   /**
@@ -156,7 +184,8 @@ export class HttpClient {
    * @throws {QCKError} On API errors, network failures, or timeouts.
    */
   async delete<T = void>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>('DELETE', path, undefined, options);
+    const { data } = await this.request<T>('DELETE', path, undefined, options);
+    return data;
   }
 
   // ── Internal ──
@@ -165,12 +194,19 @@ export class HttpClient {
    * Core request method that handles JSON serialization, retries,
    * rate-limit backoff, timeout via AbortController, and error mapping.
    *
+   * Retry policy:
+   * - 429 responses are retried for every method (the server confirmed the
+   *   request was not processed), honoring the `Retry-After` header.
+   * - Network errors and timeouts are only retried for GET requests and
+   *   requests carrying an `X-Idempotency-Key` header — non-idempotent
+   *   POST/PATCH/DELETE requests may have been processed by the server.
+   *
    * @typeParam T - Expected response data type.
    * @param method - HTTP method.
    * @param path - API endpoint path.
    * @param body - Optional JSON-serializable request body.
    * @param options - Optional query parameters.
-   * @returns The unwrapped response data.
+   * @returns The unwrapped response data and envelope metadata.
    * @throws {RateLimitError} When rate limited and all retries are exhausted.
    * @throws {QCKError} On API errors, network failures, or timeouts.
    */
@@ -179,9 +215,7 @@ export class HttpClient {
     path: string,
     body?: unknown,
     options?: RequestOptions,
-  ): Promise<T> {
-    const url = this.buildUrl(path, options?.params);
-
+  ): Promise<ResponseWithMeta<T>> {
     const headers: Record<string, string> = {
       'X-API-Key': this.apiKey,
       'Accept': 'application/json',
@@ -195,92 +229,13 @@ export class HttpClient {
       Object.assign(headers, options.headers);
     }
 
-    let lastError: Error | undefined;
-
-    for (let attempt = 0; attempt <= this.retries; attempt++) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-        const response = await fetch(url, {
-          method,
-          headers,
-          body: body !== undefined ? JSON.stringify(body) : undefined,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        // Handle rate limiting with retry
-        if (response.status === 429) {
-          const retryAfter = parseRetryAfter(response.headers.get('Retry-After'));
-          if (attempt < this.retries) {
-            await sleep(Math.min(retryAfter * 1000, MAX_RETRY_DELAY_MS));
-            continue;
-          }
-          throw new RateLimitError(
-            'Rate limit exceeded',
-            retryAfter,
-          );
-        }
-
-        // Handle other error status codes
-        if (!response.ok) {
-          throw await this.mapError(response);
-        }
-
-        // Successful DELETE with no body
-        if (response.status === 204 || response.headers.get('content-length') === '0') {
-          return undefined as unknown as T;
-        }
-
-        // Parse and unwrap
-        const json = (await response.json()) as ApiResponse<T>;
-
-        if (!json.success && json.error) {
-          throw new QCKError(
-            json.error.message,
-            response.status,
-            json.error.code,
-          );
-        }
-
-        return json.data as T;
-      } catch (err: unknown) {
-        if (err instanceof RateLimitError && attempt >= this.retries) {
-          throw err;
-        }
-
-        // Don't retry client errors (except 429, handled above)
-        if (err instanceof QCKError) {
-          throw err;
-        }
-
-        // Abort errors (timeout)
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          lastError = new QCKError('Request timed out', 0, 'TIMEOUT');
-          if (attempt >= this.retries) {
-            throw lastError;
-          }
-          continue;
-        }
-
-        // Network errors — retry
-        lastError = err instanceof Error ? err : new Error(String(err));
-        if (attempt >= this.retries) {
-          throw new QCKError(
-            `Network error: ${lastError.message}`,
-            0,
-            'NETWORK_ERROR',
-          );
-        }
-
-        // Exponential backoff for network errors
-        await sleep(Math.min(1000 * 2 ** attempt, 10_000));
-      }
-    }
-
-    throw lastError ?? new QCKError('Request failed', 0, 'UNKNOWN');
+    return this.send<T>(
+      method,
+      path,
+      headers,
+      body !== undefined ? JSON.stringify(body) : undefined,
+      options,
+    );
   }
 
   /**
@@ -293,7 +248,7 @@ export class HttpClient {
    * @param body - Binary data to send.
    * @param contentType - MIME type of the body.
    * @param options - Optional query parameters.
-   * @returns The unwrapped response data.
+   * @returns The unwrapped response data and envelope metadata.
    * @throws {RateLimitError} When rate limited and all retries are exhausted.
    * @throws {QCKError} On API errors, network failures, or timeouts.
    */
@@ -303,74 +258,125 @@ export class HttpClient {
     body: Blob | ArrayBuffer | Uint8Array,
     contentType: string,
     options?: RequestOptions,
-  ): Promise<T> {
-    const url = this.buildUrl(path, options?.params);
-
+  ): Promise<ResponseWithMeta<T>> {
     const headers: Record<string, string> = {
       'X-API-Key': this.apiKey,
       'Accept': 'application/json',
       'Content-Type': contentType,
     };
 
+    if (options?.headers) {
+      Object.assign(headers, options.headers);
+    }
+
+    return this.send<T>(method, path, headers, body as BodyInit, options);
+  }
+
+  /**
+   * Shared transport: fetch with timeout, retry loop, envelope parsing,
+   * and error mapping.
+   *
+   * @typeParam T - Expected response data type.
+   * @param method - HTTP method.
+   * @param path - API endpoint path.
+   * @param headers - Fully assembled request headers.
+   * @param body - Serialized request body, if any.
+   * @param options - Optional query parameters and error acceptance list.
+   * @returns The unwrapped response data and envelope metadata.
+   */
+  private async send<T>(
+    method: string,
+    path: string,
+    headers: Record<string, string>,
+    body: BodyInit | undefined,
+    options?: RequestOptions,
+  ): Promise<ResponseWithMeta<T>> {
+    const url = this.buildUrl(path, options?.params);
+
+    // Network errors / timeouts are only safe to retry when the request is
+    // idempotent: GETs, or requests carrying an idempotency key.
+    const retryOnNetworkError =
+      method === 'GET' || headers['X-Idempotency-Key'] !== undefined;
+
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+      try {
         const response = await fetch(url, {
           method,
           headers,
-          body: body as BodyInit,
+          body,
           signal: controller.signal,
         });
 
-        clearTimeout(timeoutId);
-
-        if (response.status === 429) {
+        // Handle rate limiting with retry (safe for all methods: the server
+        // confirmed the request was not processed).
+        if (response.status === 429 && attempt < this.retries) {
           const retryAfter = parseRetryAfter(response.headers.get('Retry-After'));
-          if (attempt < this.retries) {
-            await sleep(Math.min(retryAfter * 1000, MAX_RETRY_DELAY_MS));
-            continue;
-          }
-          throw new RateLimitError('Rate limit exceeded', retryAfter);
+          clearTimeout(timeoutId);
+          await sleep(Math.min(retryAfter * 1000, MAX_RETRY_DELAY_MS));
+          continue;
         }
+
+        // Successful DELETE / empty body
+        if (
+          response.ok &&
+          (response.status === 204 || response.headers.get('content-length') === '0')
+        ) {
+          return { data: undefined as unknown as T };
+        }
+
+        const json = await parseJsonSafe<T>(response);
 
         if (!response.ok) {
-          throw await this.mapError(response);
+          // Some endpoints (e.g. bulk create with 422) return a usable
+          // result payload alongside an error status.
+          if (
+            options?.acceptErrorStatuses?.includes(response.status) &&
+            json?.data != null
+          ) {
+            return { data: json.data, meta: json.meta };
+          }
+          throw this.mapError(response, json);
         }
 
-        if (response.status === 204 || response.headers.get('content-length') === '0') {
-          return undefined as unknown as T;
+        if (json === undefined) {
+          // 2xx with an unparsable/empty body
+          return { data: undefined as unknown as T };
         }
 
-        const json = (await response.json()) as ApiResponse<T>;
-
-        if (!json.success && json.error) {
-          throw new QCKError(json.error.message, response.status, json.error.code);
+        if (!json.success) {
+          // 207 Multi-Status (e.g. bulk partial success) sets success=false
+          // but still carries the result payload.
+          if (json.data != null) {
+            return { data: json.data, meta: json.meta };
+          }
+          throw this.mapError(response, json);
         }
 
-        return json.data as T;
+        return { data: json.data as T, meta: json.meta };
       } catch (err: unknown) {
-        if (err instanceof RateLimitError && attempt >= this.retries) {
-          throw err;
-        }
-
         if (err instanceof QCKError) {
+          // API errors (including RateLimitError after exhausted retries)
+          // are never retried here.
           throw err;
         }
 
+        // Abort errors (timeout)
         if (err instanceof DOMException && err.name === 'AbortError') {
           lastError = new QCKError('Request timed out', 0, 'TIMEOUT');
-          if (attempt >= this.retries) {
+          if (!retryOnNetworkError || attempt >= this.retries) {
             throw lastError;
           }
           continue;
         }
 
+        // Network errors
         lastError = err instanceof Error ? err : new Error(String(err));
-        if (attempt >= this.retries) {
+        if (!retryOnNetworkError || attempt >= this.retries) {
           throw new QCKError(
             `Network error: ${lastError.message}`,
             0,
@@ -378,7 +384,10 @@ export class HttpClient {
           );
         }
 
+        // Exponential backoff for network errors
         await sleep(Math.min(1000 * 2 ** attempt, 10_000));
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 
@@ -416,23 +425,30 @@ export class HttpClient {
   }
 
   /**
-   * Map an HTTP error response to the appropriate {@link QCKError} subclass.
+   * Map an HTTP error response (with its already-parsed body) to the
+   * appropriate {@link QCKError} subclass.
+   *
+   * Handles both error body shapes used by the API:
+   * - Standard envelope: `{ success, error: { code, message, details? }, meta }`
+   * - Flat middleware shape: `{ success: false, error: "CODE", message: "..." }`
    *
    * @param response - The failed HTTP response.
+   * @param json - The parsed response body, if it was valid JSON.
    * @returns A typed error instance based on the HTTP status code.
    */
-  private async mapError(response: Response): Promise<QCKError> {
+  private mapError(response: Response, json?: ApiResponse<unknown>): QCKError {
     let message = `HTTP ${response.status}`;
     let code = 'API_ERROR';
 
-    try {
-      const json = (await response.json()) as ApiResponse<unknown>;
-      if (json.error) {
-        message = json.error.message;
+    if (json?.error) {
+      if (typeof json.error === 'string') {
+        // Flat middleware shape: { success, error: "CODE", message: "..." }
+        code = json.error;
+        message = json.message ?? message;
+      } else {
         code = json.error.code;
+        message = json.error.message;
       }
-    } catch {
-      // Use default message if body can't be parsed
     }
 
     switch (response.status) {
@@ -449,6 +465,27 @@ export class HttpClient {
       default:
         return new QCKError(message, response.status, code);
     }
+  }
+}
+
+/**
+ * Parse a response body as the standard API envelope, returning `undefined`
+ * if the body is empty or not valid JSON.
+ *
+ * @typeParam T - Expected data payload type.
+ * @param response - The HTTP response to read.
+ * @returns The parsed envelope, or `undefined` if unparsable.
+ */
+async function parseJsonSafe<T>(response: Response): Promise<ApiResponse<T> | undefined> {
+  try {
+    return (await response.json()) as ApiResponse<T>;
+  } catch (err) {
+    // A timeout can fire while the body is being read — propagate it so the
+    // caller maps it to a TIMEOUT error instead of treating it as empty.
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw err;
+    }
+    return undefined;
   }
 }
 

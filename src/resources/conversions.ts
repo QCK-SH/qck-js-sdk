@@ -133,16 +133,16 @@ export class ConversionsResource {
 
   /**
    * Get conversion breakdown by a dimension.
-   * Dimensions: source, device, country, link, name.
+   * Dimensions: device, country, link, name.
    *
    * @param params - Breakdown parameters including the required dimension.
    * @returns An array of breakdown entries, each with conversions, revenue, and rate.
    *
    * @example
    * ```ts
-   * // Break down conversions by traffic source
+   * // Break down conversions by device type
    * const breakdown = await qck.conversions.breakdown({
-   *   dimension: 'source',
+   *   dimension: 'device',
    *   period: '30d',
    * });
    * for (const entry of breakdown) {

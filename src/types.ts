@@ -4,7 +4,7 @@
 export interface QCKConfig {
   /** API key for authentication. Obtain yours at https://qck.sh/app/api */
   apiKey: string;
-  /** Base URL for the QCK API. @default 'https://api.qck.sh/public-api/v1' */
+  /** Base URL for the QCK API. @default 'https://qck.sh/public-api/v1' */
   baseUrl?: string;
   /** Request timeout in milliseconds. @default 30000 */
   timeout?: number;
@@ -15,41 +15,78 @@ export interface QCKConfig {
 // ── API Response Wrapper ──
 
 /**
+ * Metadata block included in every QCK API envelope.
+ * Pagination fields are present on paginated list endpoints.
+ */
+export interface ResponseMeta {
+  /** Unique request identifier for tracing. */
+  request_id: string;
+  /** ISO 8601 response timestamp. */
+  timestamp: string;
+  /** HTTP status code (only set for non-200 success responses). */
+  status?: number;
+  /** Pagination: current page (1-indexed). */
+  page?: number;
+  /** Pagination: items per page. */
+  per_page?: number;
+  /** Pagination: total items across all pages. */
+  total?: number;
+  /** Pagination: total number of pages. */
+  total_pages?: number;
+}
+
+/**
  * Standard envelope returned by every QCK API endpoint.
  * On success, `data` contains the result; on failure, `error` is populated.
+ *
+ * Note: some middleware-level errors (e.g. missing/invalid API key, rate
+ * limits) use a flat shape instead: `{ success: false, error: "CODE",
+ * message: "..." }`. The SDK normalizes both shapes into typed errors.
  *
  * @typeParam T - The shape of the data payload.
  */
 export interface ApiResponse<T> {
   /** Whether the request succeeded. */
   success: boolean;
-  /** The response payload, or `null` on error. */
-  data: T | null;
-  /** Error details, present only when `success` is `false`. */
+  /** The response payload, or absent/`null` on error. */
+  data?: T | null;
+  /**
+   * Error details, present only when `success` is `false`.
+   * A string when the error comes from middleware (flat shape).
+   */
   error?: {
     /** Machine-readable error code (e.g. `'VALIDATION_ERROR'`). */
     code: string;
     /** Human-readable error message. */
     message: string;
-  };
+    /** Additional error details (field errors, retry_after, etc.). */
+    details?: unknown;
+  } | string;
+  /** Flat middleware errors carry the message at the top level. */
+  message?: string;
+  /** Response metadata (request id, timestamp, pagination). */
+  meta?: ResponseMeta;
 }
 
 // ── Paginated Response ──
 
 /**
- * Paginated list response returned by endpoints that support pagination.
+ * Paginated list response built by the SDK from the envelope's `data`
+ * array and pagination fields in `meta`.
  *
  * @typeParam T - The type of each item in the list.
  */
 export interface PaginatedResponse<T> {
   /** Array of items for the current page. */
   data: T[];
-  /** Total number of items across all pages. */
-  total: number;
   /** Current page number (1-indexed). */
   page: number;
   /** Maximum number of items per page. */
-  limit: number;
+  per_page: number;
+  /** Total number of items across all pages. */
+  total: number;
+  /** Total number of pages. */
+  total_pages: number;
 }
 
 // ── Links ──
@@ -75,7 +112,7 @@ export interface Link {
   /** Unique identifier for the link (UUID). */
   id: string;
   /** The generated or custom short code (e.g. `'abc123'`). */
-  link_id: string;
+  short_code: string;
   /** The destination URL that the short link redirects to. */
   original_url: string;
   /** The full short URL including the domain (e.g. `'https://qck.sh/abc123'`). */
@@ -107,9 +144,23 @@ export interface Link {
   /** ISO 8601 timestamp of the most recent click, or `undefined` if never clicked. */
   last_accessed_at?: string;
   /** ID of the custom domain this link is associated with. */
-  domain_id?: string;
+  domain_id?: string | null;
   /** Hostname of the custom domain (e.g. `'links.example.com'`). */
-  domain_name?: string;
+  domain_name?: string | null;
+  /** ID of the campaign this link belongs to (Pro tier and above), or `null`. */
+  campaign_id: string | null;
+  /** Name of the campaign this link belongs to, or `null`. */
+  campaign_name: string | null;
+  /** UTM source parameter stored on the link, or `null`. */
+  utm_source: string | null;
+  /** UTM medium parameter stored on the link, or `null`. */
+  utm_medium: string | null;
+  /** UTM campaign parameter stored on the link, or `null`. */
+  utm_campaign: string | null;
+  /** UTM term parameter stored on the link, or `null`. */
+  utm_term: string | null;
+  /** UTM content parameter stored on the link, or `null`. */
+  utm_content: string | null;
 }
 
 /** Parameters for creating a new short link. */
@@ -144,6 +195,8 @@ export interface CreateLinkParams {
   utm_content?: string;
   /** ID of the custom domain to host this link on. */
   domain_id?: string;
+  /** ID of the campaign to assign this link to (Pro tier and above). */
+  campaign_id?: string;
 }
 
 /** Parameters for updating an existing short link. All fields are optional. */
@@ -166,6 +219,18 @@ export interface UpdateLinkParams {
   is_password_protected?: boolean;
   /** New password. Only used when `is_password_protected` is `true`. */
   password?: string;
+  /** Campaign to assign the link to, or `null` to remove the campaign. */
+  campaign_id?: string | null;
+  /** New UTM source parameter. */
+  utm_source?: string;
+  /** New UTM medium parameter. */
+  utm_medium?: string;
+  /** New UTM campaign parameter. */
+  utm_campaign?: string;
+  /** New UTM term parameter. */
+  utm_term?: string;
+  /** New UTM content parameter. */
+  utm_content?: string;
 }
 
 /** Parameters for listing links with filtering, pagination, and sorting. */
@@ -204,6 +269,45 @@ export interface BulkCreateParams {
   links: CreateLinkParams[];
 }
 
+/** A successfully created link in a bulk operation, with its original request index. */
+export interface BulkLinkSuccess {
+  /** Index of the link in the original request array. */
+  index: number;
+  /** The created link object. */
+  link: Link;
+}
+
+/** Error details for a link that failed in a bulk operation. */
+export interface BulkLinkError {
+  /** Index of the failed link in the original request array. */
+  index: number;
+  /** The URL that failed (for reference). */
+  url: string;
+  /** Error message explaining why the link failed. */
+  error: string;
+  /** Error category (e.g. `'validation'`, `'security'`, `'duplicate'`). */
+  error_type: string;
+}
+
+/**
+ * Result of a bulk link creation operation.
+ * Supports partial success — some links may succeed while others fail.
+ * Returned with HTTP 201 (all succeeded), 207 (partial success),
+ * or 422 (all failed); the SDK returns the result in all three cases.
+ */
+export interface BulkCreateResult {
+  /** Successfully created links with their original indices. */
+  created: BulkLinkSuccess[];
+  /** Links that failed to create, with error details. */
+  failed: BulkLinkError[];
+  /** Total number of links in the request. */
+  total_requested: number;
+  /** Number of links successfully created. */
+  success_count: number;
+  /** Number of links that failed. */
+  failure_count: number;
+}
+
 /** Click statistics for a specific link. */
 export interface LinkStats {
   /** The link's short code (e.g. `'abc123'`). */
@@ -233,6 +337,42 @@ export interface LinkStats {
 }
 
 // ── Analytics ──
+
+/**
+ * Usage metadata returned alongside every analytics payload.
+ * Reflects tier-based limits applied to the query (data retention
+ * and monthly tracked-click volume).
+ */
+export interface AnalyticsUsage {
+  /** Tracked clicks recorded this calendar month. */
+  clicks_this_month: number;
+  /** Monthly tracked-click limit for the tier, or `null` for unlimited. */
+  click_limit: number | null;
+  /** Whether the monthly click limit has been exceeded. */
+  limit_exceeded: boolean;
+  /** Subscription tier name. */
+  tier: string;
+  /** Data retention window in days for the tier. */
+  retention_days: number;
+  /**
+   * If over the limit, the earliest date (YYYY-MM-DD) in the most-recent
+   * analytics window. Queries are clamped to start from this date.
+   */
+  cutoff_date?: string;
+}
+
+/**
+ * Wrapper returned by every analytics endpoint: the analytics payload
+ * plus tier usage metadata.
+ *
+ * @typeParam T - The shape of the analytics payload.
+ */
+export interface AnalyticsResult<T> {
+  /** The analytics payload. */
+  analytics: T;
+  /** Tier usage metadata for the query. */
+  usage: AnalyticsUsage;
+}
 
 /** Parameters for retrieving an analytics summary. */
 export interface AnalyticsSummaryParams {
@@ -266,6 +406,10 @@ export interface AnalyticsSummary {
   active_links: number;
   /** Total number of links in the account. */
   total_links_count: number;
+  /** Links created this calendar month (quota-counted). */
+  links_this_month: number;
+  /** Tracked clicks this calendar month. */
+  clicks_this_month: number;
 }
 
 /** Parameters for retrieving timeseries analytics data. */
@@ -284,8 +428,8 @@ export interface TimeseriesParams {
 
 /** A single data point in a timeseries analytics response. */
 export interface TimeseriesPoint {
-  /** ISO 8601 timestamp for this data point. */
-  timestamp: string;
+  /** Date for this data point (YYYY-MM-DD). */
+  date: string;
   /** Total clicks in this time bucket. */
   clicks: number;
   /** Unique visitors in this time bucket. */
@@ -308,8 +452,6 @@ export interface GeoAnalyticsParams {
 
 /** A geographic analytics entry showing click data for a single country. */
 export interface GeoAnalyticsEntry {
-  /** Full country name (e.g. `'United States'`). */
-  country: string;
   /** ISO 3166-1 alpha-2 country code (e.g. `'US'`). */
   country_code: string;
   /** Total clicks from this country. */
@@ -394,18 +536,50 @@ export interface HourlyAnalyticsEntry {
 
 // ── Domains ──
 
-/** A custom domain configured for short link hosting. */
+/** Lifecycle status of a custom domain. */
+export type DomainStatus =
+  | 'pending'
+  | 'provisioning'
+  | 'provisioning_failed'
+  | 'active'
+  | 'rejected'
+  | 'suspended';
+
+/**
+ * A custom domain configured for short link hosting.
+ * Note: this endpoint serializes fields in camelCase.
+ */
 export interface Domain {
   /** Unique identifier for the domain (UUID). */
   id: string;
+  /** Organization that owns the domain (UUID). */
+  organizationId: string;
   /** The domain hostname (e.g. `'links.example.com'`). */
   domain: string;
-  /** Whether DNS verification has been completed. */
-  is_verified: boolean;
-  /** Whether this is the default domain for new links. */
-  is_default: boolean;
+  /** Current lifecycle status of the domain. */
+  status: DomainStatus;
+  /** Token used for DNS TXT verification. */
+  verificationToken: string;
+  /** ISO 8601 timestamp when DNS verification succeeded, or `null`. */
+  dnsVerifiedAt: string | null;
+  /** Reason the domain was rejected by an admin, or `null`. */
+  rejectionReason: string | null;
   /** ISO 8601 timestamp when the domain was added. */
-  created_at: string;
+  createdAt: string;
+  /** ISO 8601 timestamp when the domain was last updated. */
+  updatedAt: string;
+  /** ISO 8601 timestamp when the SSL certificate expires, or `null`. */
+  sslExpiryAt: string | null;
+  /** Health monitoring status, or `null`. */
+  healthStatus: string | null;
+  /** Internal proxy host ID, or `null`. */
+  npmProxyHostId: number | null;
+  /** Internal certificate ID, or `null`. */
+  npmCertificateId: number | null;
+  /** SSL provisioning status, or `null`. */
+  sslStatus: string | null;
+  /** Error message if provisioning failed, or `null`. */
+  provisioningError: string | null;
 }
 
 // ── Webhook Event Types ──
@@ -417,7 +591,7 @@ export interface Domain {
  *
  * @example
  * ```ts
- * import { WebhookEvents } from '@qck/sdk';
+ * import { WebhookEvents } from '@qcksh/sdk';
  *
  * await qck.webhooks.create({
  *   url: 'https://example.com/webhooks',
@@ -473,7 +647,7 @@ export type WebhookEventType = (typeof WebhookEvents)[keyof typeof WebhookEvents
  *
  * @example
  * ```ts
- * import { WebhookEventCategories } from '@qck/sdk';
+ * import { WebhookEventCategories } from '@qcksh/sdk';
  *
  * // Subscribe to all link-related events
  * await qck.webhooks.create({
@@ -585,30 +759,37 @@ export interface UpdateWebhookParams {
   is_active?: boolean;
 }
 
-/** A record of a single webhook delivery attempt. */
+/** Delivery lifecycle status of a webhook delivery attempt. */
+export type WebhookDeliveryStatus = 'pending' | 'delivered' | 'failed' | 'retrying';
+
+/** A record of a single webhook delivery. */
 export interface WebhookDelivery {
-  /** Unique identifier for the delivery attempt (UUID). */
+  /** Unique identifier for the delivery (UUID). */
   id: string;
+  /** The webhook endpoint this delivery was sent to (UUID). */
+  endpoint_id: string;
   /** The event type that was delivered. */
   event_type: string;
-  /** Delivery status (e.g. `'success'`, `'failed'`, `'pending'`). */
-  status: string;
-  /** HTTP status code returned by the endpoint, if available. */
-  http_status?: number;
+  /** The JSON payload that was sent to the endpoint. */
+  payload: unknown;
+  /** Delivery status. */
+  status: WebhookDeliveryStatus;
   /** Which attempt number this was (1-based). */
   attempt_number: number;
-  /** ISO 8601 timestamp when the delivery was initiated. */
+  /** Maximum number of attempts before the delivery is marked failed. */
+  max_attempts: number;
+  /** HTTP status code returned by the endpoint, or `null` if unavailable. */
+  http_status: number | null;
+  /** Response body returned by the endpoint, or `null`. */
+  response_body: string | null;
+  /** Error message for failed attempts, or `null`. */
+  error_message: string | null;
+  /** ISO 8601 timestamp of the next scheduled retry, or `null`. */
+  next_retry_at: string | null;
+  /** ISO 8601 timestamp when the delivery was successfully received, or `null`. */
+  delivered_at: string | null;
+  /** ISO 8601 timestamp when the delivery was created. */
   created_at: string;
-  /** ISO 8601 timestamp when the delivery was successfully received. */
-  delivered_at?: string;
-}
-
-/** Parameters for listing webhook delivery attempts. */
-export interface ListWebhookDeliveriesParams {
-  /** Page number (1-indexed). @default 1 */
-  page?: number;
-  /** Number of deliveries per page. @default 20 */
-  limit?: number;
 }
 
 // ── Journey Tracking ──
@@ -747,6 +928,30 @@ export interface SessionEvent {
   scroll_percent: number;
   /** Time spent on the page in seconds at the time of the event. */
   time_on_page: number;
+}
+
+/** Paginated response for journey session listings. */
+export interface PaginatedSessions {
+  /** Sessions for the current page. */
+  sessions: SessionSummary[];
+  /** Total number of sessions across all pages. */
+  total: number;
+  /** Current page number (1-indexed). */
+  page: number;
+  /** Maximum number of sessions per page. */
+  limit: number;
+}
+
+/** Paginated response for raw journey event listings. */
+export interface PaginatedEvents {
+  /** Events for the current page. */
+  events: JourneyEvent[];
+  /** Total number of events across all pages. */
+  total: number;
+  /** Current page number (1-indexed). */
+  page: number;
+  /** Maximum number of events per page. */
+  limit: number;
 }
 
 /** Parameters for listing journey sessions. */
@@ -888,4 +1093,10 @@ export interface RequestOptions {
   params?: Record<string, string | number | boolean | string[] | undefined>;
   /** Additional HTTP headers to include in the request. */
   headers?: Record<string, string>;
+  /**
+   * Error status codes for which the response body's `data` payload should be
+   * returned instead of throwing (e.g. 422 for bulk operations where the
+   * result describes per-item failures). Internal use.
+   */
+  acceptErrorStatuses?: number[];
 }
